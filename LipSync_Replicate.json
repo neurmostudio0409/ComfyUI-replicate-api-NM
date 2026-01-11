@@ -1,0 +1,80 @@
+{
+  "12": {
+    "inputs": {
+      "audio": "ComfyUI_00048_.mp3",
+      "audioUI": ""
+    },
+    "class_type": "LoadAudio",
+    "_meta": {
+      "title": "Load Audio"
+    }
+  },
+  "20": {
+    "inputs": {
+      "video": "veo_1764362738_0.mp4",
+      "force_rate": 0,
+      "custom_width": 0,
+      "custom_height": 0,
+      "frame_load_cap": 0,
+      "skip_first_frames": 0,
+      "select_every_nth": 1,
+      "format": "AnimateDiff"
+    },
+    "class_type": "VHS_LoadVideo",
+    "_meta": {
+      "title": "Load Video (Upload) 🎥🅥🅗🅢"
+    }
+  },
+  "22": {
+    "inputs": {
+      "output_filename": "lipsync_output",
+      "sync_mode": "loop",
+      "temperature": 1,
+      "active_speaker": true,
+      "video": [
+        "20",
+        0
+      ],
+      "audio": [
+        "12",
+        0
+      ]
+    },
+    "class_type": "SyncLipsyncNode",
+    "_meta": {
+      "title": "Sync Lipsync Generate"
+    }
+  },
+  "23": {
+    "inputs": {
+      "video_paths": [
+        "22",
+        0
+      ],
+      "audio_paths": [
+        "22",
+        1
+      ]
+    },
+    "class_type": "SyncVideoOutput",
+    "_meta": {
+      "title": "Sync Video Output"
+    }
+  },
+  "24": {
+    "inputs": {
+      "filename_prefix": "video/ComfyUI",
+      "format": "auto",
+      "codec": "auto",
+      "video-preview": "",
+      "video": [
+        "23",
+        0
+      ]
+    },
+    "class_type": "SaveVideo",
+    "_meta": {
+      "title": "Save Video"
+    }
+  }
+}
