@@ -97,7 +97,7 @@ REPLICATE_MODELS = {
         "inputs": {
             "video": {"type": "VIDEO", "required": True},
             "audio": {"type": "AUDIO", "required": True},
-            "sync_mode": {"type": "COMBO", "options": ["loop", "trim"], "default": "loop"},
+            "sync_mode": {"type": "COMBO", "options": ["loop", "bounce", "cut_off", "silence", "remap"], "default": "loop"},
             "temperature": {"type": "FLOAT", "default": 0.5, "min": 0.0, "max": 1.0, "step": 0.1},
             "active_speaker": {"type": "BOOLEAN", "default": False},
         },
