@@ -187,12 +187,24 @@ class ReplicateAPI:
         
         Args:
             output: 模型輸出
-            output_type (str): 輸出類型 ("video", "image", "audio")
+            output_type (str): 輸出類型 ("video", "image", "audio", "3d", "json")
             filename (str): 儲存的基本檔名
         
         Returns:
-            str: 下載/儲存的檔案路徑
+            str/dict: 下載/儲存的檔案路徑，或 JSON 資料
         """
+        # Handle JSON output (e.g., voice-cloning)
+        if output_type == "json":
+            if isinstance(output, dict):
+                return output
+            if hasattr(output, '__dict__'):
+                return vars(output)
+            try:
+                import json
+                return json.loads(str(output))
+            except Exception:
+                return {"result": str(output)}
+        
         # Get URL from output
         if hasattr(output, 'url'):
             url = output.url
@@ -211,6 +223,7 @@ class ReplicateAPI:
             "video": ".mp4",
             "image": ".png",
             "audio": ".wav",
+            "3d": ".glb",
         }
         extension = extension_map.get(output_type, ".mp4")
         

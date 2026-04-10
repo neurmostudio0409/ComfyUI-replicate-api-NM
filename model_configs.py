@@ -65,7 +65,7 @@ REPLICATE_MODELS = {
     "luma-photon": {
         "name": "luma/photon",
         "display_name": "Luma Photon",
-        "category": "video/generation",
+        "category": "image/generation",
         "description": "Fast, high-quality image generation",
         "inputs": {
             "prompt": {"type": "STRING", "required": True, "multiline": True},
@@ -78,7 +78,7 @@ REPLICATE_MODELS = {
     "luma-photon-flash": {
         "name": "luma/photon-flash",
         "display_name": "Luma Photon Flash",
-        "category": "video/generation",
+        "category": "image/generation",
         "description": "Ultra-fast image generation",
         "inputs": {
             "prompt": {"type": "STRING", "required": True, "multiline": True},
@@ -192,7 +192,124 @@ REPLICATE_MODELS = {
         "outputs": ["video"],
         "return_type": "VIDEO",
     },
-    
+
+    "ltx-2-fast": {
+        "name": "lightricks/ltx-2-fast",
+        "display_name": "Lightricks LTX-2 Fast",
+        "category": "video/generation",
+        "description": "LTX-2 快速影片生成 - 圖片轉影片 / Fast image-to-video generation",
+        "inputs": {
+            "image": {"type": "IMAGE", "required": True},
+            "prompt": {"type": "STRING", "required": True, "multiline": True},
+        },
+        "outputs": ["video"],
+        "return_type": "VIDEO",
+    },
+
+    "ltx-2-pro": {
+        "name": "lightricks/ltx-2-pro",
+        "display_name": "Lightricks LTX-2 Pro",
+        "category": "video/generation",
+        "description": "LTX-2 Pro 圖片轉影片 / Image-to-video generation",
+        "inputs": {
+            "image": {"type": "IMAGE", "required": True},
+            "prompt": {"type": "STRING", "required": True, "multiline": True},
+        },
+        "outputs": ["video"],
+        "return_type": "VIDEO",
+    },
+
+    "ltx-2-distilled": {
+        "name": "lightricks/ltx-2-distilled",
+        "display_name": "Lightricks LTX-2 Distilled",
+        "category": "video/generation",
+        "description": "LTX-2 Distilled 圖片轉影片 / Distilled image-to-video generation",
+        "inputs": {
+            "image": {"type": "IMAGE", "required": True},
+            "prompt": {"type": "STRING", "required": True, "multiline": True},
+        },
+        "outputs": ["video"],
+        "return_type": "VIDEO",
+    },
+
+    "ltx-2.3-fast": {
+        "name": "lightricks/ltx-2.3-fast",
+        "display_name": "Lightricks LTX-2.3 Fast",
+        "category": "video/generation",
+        "description": "LTX-2.3 快速文字轉影片 / Fast text-to-video generation",
+        "inputs": {
+            "prompt": {"type": "STRING", "required": True, "multiline": True},
+            "camera_motion": {"type": "COMBO", "options": ["none", "dolly_in", "dolly_out", "pan_left", "pan_right", "tilt_up", "tilt_down", "roll_cw", "roll_ccw"], "default": "none"},
+        },
+        "outputs": ["video"],
+        "return_type": "VIDEO",
+    },
+
+    "kling-v2.1": {
+        "name": "kwaivgi/kling-v2.1",
+        "display_name": "Kling v2.1",
+        "category": "video/generation",
+        "description": "Kling v2.1 - 圖片轉影片 / Image-to-video generation",
+        "inputs": {
+            "prompt": {"type": "STRING", "required": True, "multiline": True},
+            "start_image": {"type": "IMAGE", "required": False},
+        },
+        "outputs": ["video"],
+        "return_type": "VIDEO",
+    },
+
+    "seedance-2.0": {
+        "name": "bytedance/seedance-2.0",
+        "display_name": "ByteDance Seedance 2.0",
+        "category": "video/generation",
+        "description": "Seedance 2.0 - 文字轉影片 / Text-to-video generation",
+        "inputs": {
+            "prompt": {"type": "STRING", "required": True, "multiline": True},
+            "seed": {"type": "INT", "required": False, "default": -1, "min": -1, "max": 2147483647, "step": 1},
+            "duration": {"type": "INT", "default": 7, "min": 1, "max": 30, "step": 1},
+        },
+        "outputs": ["video"],
+        "return_type": "VIDEO",
+    },
+
+    "seedance-1-lite": {
+        "name": "bytedance/seedance-1-lite",
+        "display_name": "ByteDance Seedance 1 Lite",
+        "category": "video/generation",
+        "description": "Seedance 1 Lite - 輕量文字轉影片 / Lightweight text-to-video generation",
+        "inputs": {
+            "prompt": {"type": "STRING", "required": True, "multiline": True},
+        },
+        "outputs": ["video"],
+        "return_type": "VIDEO",
+    },
+
+    "seedance-1-pro": {
+        "name": "bytedance/seedance-1-pro",
+        "display_name": "ByteDance Seedance 1 Pro",
+        "category": "video/generation",
+        "description": "Seedance 1 Pro - 專業文字轉影片 / Professional text-to-video generation",
+        "inputs": {
+            "prompt": {"type": "STRING", "required": True, "multiline": True},
+        },
+        "outputs": ["video"],
+        "return_type": "VIDEO",
+    },
+
+    "p-video": {
+        "name": "prunaai/p-video",
+        "display_name": "PrunaAI P-Video",
+        "category": "video/generation",
+        "description": "快速影片生成 - 從圖片和文字生成影片 / Fast video generation from image and text",
+        "inputs": {
+            "image": {"type": "IMAGE", "required": True},
+            "prompt": {"type": "STRING", "required": True, "multiline": True},
+            "prompt_upsampling": {"type": "BOOLEAN", "default": False},
+        },
+        "outputs": ["video"],
+        "return_type": "VIDEO",
+    },
+
     # ===== Video Enhancement Models =====
     "video-retalking": {
         "name": "chenxwh/video-retalking",
@@ -250,6 +367,18 @@ REPLICATE_MODELS = {
         "outputs": ["audio"],
         "return_type": "AUDIO",
     },
+
+    "voice-cloning": {
+        "name": "minimax/voice-cloning",
+        "display_name": "MiniMax Voice Cloning",
+        "category": "audio/voice-cloning",
+        "description": "聲音克隆 - 從音訊樣本克隆聲音 / Clone voice from audio sample",
+        "inputs": {
+            "voice_file": {"type": "AUDIO", "required": True},
+        },
+        "outputs": ["json"],
+        "return_type": "STRING",
+    },
     
     # ===== Image Generation Models =====
     "flux-schnell": {
@@ -283,6 +412,19 @@ REPLICATE_MODELS = {
         "outputs": ["image"],
         "return_type": "IMAGE",
     },
+
+    # ===== 3D Generation Models =====
+    "hunyuan-3d-3.1": {
+        "name": "tencent/hunyuan-3d-3.1",
+        "display_name": "Tencent Hunyuan 3D 3.1",
+        "category": "3d/generation",
+        "description": "3D模型生成 - 從文字生成3D模型 / Generate 3D models from text",
+        "inputs": {
+            "prompt": {"type": "STRING", "required": True, "multiline": True},
+        },
+        "outputs": ["3d"],
+        "return_type": "FILE",
+    },
 }
 
 
@@ -313,3 +455,19 @@ def get_model_choices():
 def get_model_names():
     """Get list of model names for ComfyUI"""
     return list(REPLICATE_MODELS.keys())
+
+
+# Category groups for node organization
+CATEGORY_GROUPS = {
+    "video": ["video/generation"],
+    "enhancement": ["video/enhancement", "video/lipsync"],
+    "audio": ["audio/generation", "audio/voice-cloning"],
+    "image": ["image/generation"],
+    "3d": ["3d/generation"],
+}
+
+
+def get_model_names_by_group(group_key):
+    """Get model names for a category group"""
+    prefixes = CATEGORY_GROUPS.get(group_key, [])
+    return [k for k, v in REPLICATE_MODELS.items() if v.get("category") in prefixes]

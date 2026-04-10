@@ -13,12 +13,14 @@ from .replicate_utils import VideoUtils, AudioUtils, ImageUtils, cleanup_temp_fi
 
 # 嘗試載入 model_configs
 try:
-    from .model_configs import REPLICATE_MODELS, get_model_config, get_model_names
+    from .model_configs import REPLICATE_MODELS, get_model_config, get_model_names, get_model_names_by_group
     HAS_MODEL_CONFIGS = True
 except ImportError:
     HAS_MODEL_CONFIGS = False
     def get_model_names():
         return ["lipsync-2-pro"]
+    def get_model_names_by_group(group):  # noqa: unused parameter for fallback
+        return []
 
 # Try to import ComfyUI's folder_paths
 try:
@@ -295,6 +297,9 @@ class ReplicateDynamicNode:
                 "last_frame": ("IMAGE", {
                     "tooltip": "末幀圖片 / Last Frame - Veo 使用 / Used for Veo"
                 }),
+                "start_image": ("IMAGE", {
+                    "tooltip": "起始幀圖片 / Start Image - Kling 使用 / Used for Kling"
+                }),
                 
                 # === 影片/音訊輸入 / Video/Audio Inputs ===
                 "video": ("VIDEO", {
@@ -302,12 +307,6 @@ class ReplicateDynamicNode:
                 }),
                 "audio": ("AUDIO", {
                     "tooltip": "輸入音訊 / Input Audio - Lipsync, MusicGen 使用 / Used for Lipsync, MusicGen"
-                }),
-                
-                # === 輸出設定 / Output Settings ===
-                "output_filename": ("STRING", {
-                    "default": "replicate_output",
-                    "tooltip": "輸出檔名 / Output Filename"
                 }),
                 
                 # === Sora/Veo 參數 / Sora/Veo Parameters ===
@@ -391,6 +390,14 @@ class ReplicateDynamicNode:
                     "default": 127, "min": 1, "max": 255, "step": 1,
                     "tooltip": "運動強度 / Motion Bucket - SVD 使用 / Used for SVD"
                 }),
+                "seed": ("INT", {
+                    "default": -1, "min": -1, "max": 2147483647, "step": 1,
+                    "tooltip": "種子值 / Seed - Seedance 等使用 / Used for Seedance etc. (-1 = random)"
+                }),
+                "camera_motion": (["none", "dolly_in", "dolly_out", "pan_left", "pan_right", "tilt_up", "tilt_down", "roll_cw", "roll_ccw"], {
+                    "default": "none",
+                    "tooltip": "鏡頭運動 / Camera Motion - LTX-2.3 使用 / Used for LTX-2.3"
+                }),
             },
         }
     
@@ -400,187 +407,17 @@ class ReplicateDynamicNode:
     CATEGORY = "replicate/dynamic"
     
     def run_model(self, model, prompt="", image=None, input_reference=None, first_frame_image=None,
-                 last_frame=None, video=None, audio=None, output_filename="replicate_output", **kwargs):
+                 last_frame=None, start_image=None, video=None, audio=None, **kwargs):
         """
         執行選擇的 Replicate 模型 / Run selected Replicate model
         自動過濾並只使用該模型需要的參數 / Automatically filters and uses only required parameters
         """
-        config = get_model_config(model) if HAS_MODEL_CONFIGS else None
-        if not config:
-            print(f"❌ 未知模型: {model}")
-            return ("", "")
-        
-        print("=" * 60)
-        print(f"🤖 Replicate: {config['display_name']}")
-        print(f"📋 模型ID / Model ID: {model}")
-        print("=" * 60)
-        
-        temp_files = []
-        
-        try:
-            api = ReplicateAPI()
-            
-            # 建立輸入參數
-            inputs = {}
-            model_inputs = config.get("inputs", {})
-            
-            for input_name, input_config in model_inputs.items():
-                input_type = input_config.get("type")
-                is_required = input_config.get("required", False)
-                
-                if input_type == "STRING" and input_name == "prompt":
-                    if prompt or is_required:
-                        inputs[input_name] = prompt
-                        
-                elif input_type == "IMAGE":
-                    image_param = None
-                    if input_name == "image" and image is not None:
-                        image_param = image
-                    elif input_name == "input_reference" and input_reference is not None:
-                        image_param = input_reference
-                    elif input_name == "first_frame_image" and first_frame_image is not None:
-                        image_param = first_frame_image
-                    elif input_name == "last_frame" and last_frame is not None:
-                        image_param = last_frame
-                    
-                    if image_param is not None:
-                        image_path = ImageUtils.save_image_tensor(image_param)
-                        if image_path:
-                            temp_files.append(image_path)
-                            image_url = api.upload_file(image_path)
-                            if image_url:
-                                inputs[input_name] = image_url
-                    elif is_required:
-                        print(f"⚠️ 必要的圖片參數 '{input_name}' 未提供")
-                        
-                elif input_type == "VIDEO" and video is not None:
-                    video_path = self._extract_path(video)
-                    if video_path and os.path.exists(video_path):
-                        video_url = api.upload_file(video_path)
-                        if video_url:
-                            inputs[input_name] = video_url
-                            
-                elif input_type == "AUDIO" and audio is not None:
-                    audio_path = AudioUtils.save_audio_from_comfyui(audio)
-                    if audio_path:
-                        temp_files.append(audio_path)
-                        audio_url = api.upload_file(audio_path)
-                        if audio_url:
-                            inputs[input_name] = audio_url
-                            
-                elif input_type in ["COMBO", "FLOAT", "INT", "BOOLEAN"]:
-                    if input_name in kwargs and kwargs[input_name] is not None:
-                        inputs[input_name] = kwargs[input_name]
-                    elif is_required and "default" in input_config:
-                        inputs[input_name] = input_config["default"]
-            
-            print(f"📤 上傳並執行模型 / Uploading and running model...")
-            print(f"📝 使用的參數 / Used parameters: {list(inputs.keys())}")
-            
-            # 列出忽略的參數（提供的但模型不需要的）
-            all_provided = {k: v for k, v in kwargs.items() if v is not None}
-            all_provided.update({'prompt': prompt, 'image': image, 'input_reference': input_reference, 
-                               'first_frame_image': first_frame_image, 'last_frame': last_frame,
-                               'video': video, 'audio': audio})
-            all_provided = {k: v for k, v in all_provided.items() if v is not None and v != "" and v != []}
-            ignored = set(all_provided.keys()) - set(inputs.keys()) - {'output_filename'}
-            if ignored:
-                print(f"ℹ️  忽略的參數 / Ignored parameters: {sorted(ignored)}")
-            
-            result = api.run_model(model, inputs, output_filename)
-            
-            for temp_file in temp_files:
-                cleanup_temp_file(temp_file)
-            
-            # 處理結果
-            video_path = ""
-            audio_path = ""
-            
-            if isinstance(result, list) and len(result) >= 2:
-                video_path = result[0] if result[0] else ""
-                audio_path = result[1] if result[1] else ""
-            elif isinstance(result, str):
-                video_path = result
-                if config.get("has_audio"):
-                    audio_path = result.replace(".mp4", ".wav").replace(".mp4", "_audio.wav")
-                    if not os.path.exists(audio_path):
-                        audio_path = ""
-            
-            if video_path and os.path.exists(video_path):
-                print("=" * 60)
-                print("✅ 生成完成！")
-                print(f"📁 影片: {video_path}")
-                if audio_path:
-                    print(f"🎵 音訊: {audio_path}")
-                print("=" * 60)
-                
-                # 提取第一幀作為圖片
-                first_frame = None
-                try:
-                    import cv2
-                    cap = cv2.VideoCapture(video_path)
-                    ret, frame = cap.read()
-                    cap.release()
-                    if ret:
-                        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                        first_frame = torch.from_numpy(frame_rgb).float() / 255.0
-                        first_frame = first_frame.unsqueeze(0)
-                        print(f"🖼️ 已提取第一幀: {first_frame.shape}")
-                except Exception as e:
-                    print(f"⚠️ 提取第一幀失敗: {e}")
-                    first_frame = torch.zeros((1, 512, 512, 3))
-                
-                if first_frame is None:
-                    first_frame = torch.zeros((1, 512, 512, 3))
-                
-                # 建立執行資訊
-                info_lines = []
-                info_lines.append("✅ 執行成功 / Execution Successful")
-                info_lines.append(f"🤖 模型 / Model: {config['display_name']}")
-                info_lines.append(f"📝 使用的參數 / Used Parameters: {', '.join(inputs.keys())}")
-                if ignored:
-                    info_lines.append(f"ℹ️  忽略的參數 / Ignored: {', '.join(sorted(ignored))}")
-                info_lines.append(f"📁 影片路徑 / Video: {video_path}")
-                if audio_path:
-                    info_lines.append(f"🎵 音訊路徑 / Audio: {audio_path}")
-                info_text = "\n".join(info_lines)
-                
-                # 返回列表格式
-                video_paths = [video_path]
-                audio_paths = [audio_path] if audio_path else []
-                return (video_paths, audio_paths, first_frame, info_text)
-            else:
-                print("=" * 60)
-                print("❌ 生成失敗！")
-                print("=" * 60)
-                
-                # 建立失敗資訊
-                info_text = f"❌ 執行失敗 / Execution Failed\n🤖 模型 / Model: {config['display_name']}\n⚠️ 請檢查參數和 API 狀態"
-                return ([], [], torch.zeros((1, 512, 512, 3)), info_text)
-                
-        except Exception as e:
-            print(f"❌ 生成時發生錯誤: {e}")
-            import traceback
-            traceback.print_exc()
-            
-            for temp_file in temp_files:
-                cleanup_temp_file(temp_file)
-            
-            # 建立錯誤資訊
-            error_info = f"❌ 執行錯誤 / Execution Error\n🤖 模型 / Model: {model}\n⚠️ 錯誤訊息 / Error: {str(e)}"
-            return ([], [], torch.zeros((1, 512, 512, 3)), error_info)
-    
-    def _extract_path(self, video_input):
-        """從影片輸入提取檔案路徑"""
-        if isinstance(video_input, str):
-            return video_input
-        elif hasattr(video_input, 'video_path'):
-            return video_input.video_path
-        elif hasattr(video_input, 'filename'):
-            return video_input.filename
-        elif isinstance(video_input, dict):
-            return video_input.get('video') or video_input.get('filename') or video_input.get('path')
-        return None
+        result = _run_replicate_model(
+            model, prompt=prompt, image=image, input_reference=input_reference,
+            first_frame_image=first_frame_image, last_frame=last_frame,
+            start_image=start_image, video=video, audio=audio, **kwargs
+        )
+        return (result[0], result[1], result[2], result[3])
 
 
 class ReplicateVideoOutput:
@@ -1047,6 +884,436 @@ class ReplicateModelInfo:
 
 
 # ======================
+# 共用執行邏輯 / Shared Execution Logic
+# ======================
+
+def _extract_video_path(video_input):
+    """從影片輸入提取檔案路徑"""
+    if isinstance(video_input, str):
+        return video_input
+    elif hasattr(video_input, 'video_path'):
+        return video_input.video_path
+    elif hasattr(video_input, 'filename'):
+        return video_input.filename
+    elif isinstance(video_input, dict):
+        return video_input.get('video') or video_input.get('filename') or video_input.get('path')
+    return None
+
+
+def _run_replicate_model(model_id, prompt="", image=None, input_reference=None,
+                          first_frame_image=None, last_frame=None, start_image=None,
+                          video=None, audio=None, **kwargs):
+    """
+    共用的 Replicate 模型執行邏輯
+    Returns: (video_paths, audio_paths, first_frame_tensor, info_text, file_path)
+    """
+    config = get_model_config(model_id) if HAS_MODEL_CONFIGS else None
+    if not config:
+        info = f"❌ 未知模型: {model_id}"
+        print(info)
+        return ([], [], torch.zeros((1, 512, 512, 3)), info, "")
+    
+    print("=" * 60)
+    print(f"🤖 Replicate: {config['display_name']}")
+    print(f"📋 模型ID: {model_id}")
+    print("=" * 60)
+    
+    output_filename = model_id.replace(".", "_").replace("/", "_")
+    temp_files = []
+    
+    try:
+        api = ReplicateAPI()
+        inputs = {}
+        model_inputs = config.get("inputs", {})
+        
+        # 圖片參數對照表
+        image_map = {
+            'image': image,
+            'input_reference': input_reference,
+            'first_frame_image': first_frame_image,
+            'last_frame': last_frame,
+            'start_image': start_image,
+        }
+        
+        for input_name, input_config in model_inputs.items():
+            input_type = input_config.get("type")
+            is_required = input_config.get("required", False)
+            
+            if input_type == "STRING" and input_name == "prompt":
+                if prompt or is_required:
+                    inputs[input_name] = prompt
+                    
+            elif input_type == "IMAGE":
+                image_param = None
+                if input_name in image_map:
+                    image_param = image_map[input_name]
+                elif input_name in kwargs:
+                    image_param = kwargs[input_name]
+                
+                if image_param is not None:
+                    image_path = ImageUtils.save_image_tensor(image_param)
+                    if image_path:
+                        temp_files.append(image_path)
+                        image_url = api.upload_file(image_path)
+                        if image_url:
+                            inputs[input_name] = image_url
+                elif is_required:
+                    print(f"⚠️ 必要圖片參數 '{input_name}' 未提供")
+                    
+            elif input_type == "VIDEO":
+                if video is not None:
+                    video_path = _extract_video_path(video)
+                    if video_path and os.path.exists(video_path):
+                        video_url = api.upload_file(video_path)
+                        if video_url:
+                            inputs[input_name] = video_url
+                            
+            elif input_type == "AUDIO":
+                if audio is not None:
+                    audio_path = AudioUtils.save_audio_from_comfyui(audio)
+                    if audio_path:
+                        temp_files.append(audio_path)
+                        audio_url = api.upload_file(audio_path)
+                        if audio_url:
+                            inputs[input_name] = audio_url
+                            
+            elif input_type in ["COMBO", "FLOAT", "INT", "BOOLEAN"]:
+                if input_name in kwargs and kwargs[input_name] is not None:
+                    inputs[input_name] = kwargs[input_name]
+                elif is_required and "default" in input_config:
+                    inputs[input_name] = input_config["default"]
+        
+        print(f"📤 執行模型...")
+        print(f"📝 參數: {list(inputs.keys())}")
+        
+        result = api.run_model(model_id, inputs, output_filename)
+        
+        for temp_file in temp_files:
+            cleanup_temp_file(temp_file)
+        
+        # 處理結果
+        video_path = ""
+        audio_path = ""
+        file_path = ""
+        
+        if isinstance(result, dict):
+            # JSON output (e.g., voice-cloning)
+            import json
+            info_text = f"✅ 執行成功\n🤖 {config['display_name']}\n📋 結果:\n{json.dumps(result, indent=2, ensure_ascii=False)}"
+            return ([], [], torch.zeros((1, 512, 512, 3)), info_text, "")
+        elif isinstance(result, list) and len(result) >= 2:
+            video_path = result[0] if result[0] else ""
+            audio_path = result[1] if result[1] else ""
+        elif isinstance(result, str):
+            if result.endswith(('.glb', '.obj', '.fbx', '.gltf')):
+                file_path = result
+            else:
+                video_path = result
+                if config.get("has_audio"):
+                    audio_path = result.replace(".mp4", "_audio.wav")
+                    if not os.path.exists(audio_path):
+                        audio_path = ""
+        
+        # 提取第一幀
+        first_frame = torch.zeros((1, 512, 512, 3))
+        if video_path and os.path.exists(video_path):
+            try:
+                cap = cv2.VideoCapture(video_path)
+                ret, frame = cap.read()
+                cap.release()
+                if ret:
+                    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    first_frame = torch.from_numpy(frame_rgb).float() / 255.0
+                    first_frame = first_frame.unsqueeze(0)
+            except Exception:
+                pass
+        
+        # 載入圖片結果
+        if not video_path and not file_path and result and isinstance(result, str) and os.path.exists(result):
+            try:
+                img = cv2.imread(result)
+                if img is not None:
+                    img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                    first_frame = torch.from_numpy(img_rgb).float() / 255.0
+                    first_frame = first_frame.unsqueeze(0)
+                    file_path = result
+            except Exception:
+                pass
+        
+        # 建立資訊
+        info_lines = [f"✅ 執行成功", f"🤖 {config['display_name']}"]
+        info_lines.append(f"📝 參數: {', '.join(inputs.keys())}")
+        if video_path:
+            info_lines.append(f"📁 影片: {video_path}")
+        if audio_path:
+            info_lines.append(f"🎵 音訊: {audio_path}")
+        if file_path:
+            info_lines.append(f"📁 檔案: {file_path}")
+        info_text = "\n".join(info_lines)
+        
+        video_paths = [video_path] if video_path and os.path.exists(video_path) else []
+        audio_paths = [audio_path] if audio_path and os.path.exists(audio_path) else []
+        
+        return (video_paths, audio_paths, first_frame, info_text, file_path if file_path else (video_path or ""))
+    
+    except Exception as e:
+        print(f"❌ 錯誤: {e}")
+        import traceback
+        traceback.print_exc()
+        for temp_file in temp_files:
+            cleanup_temp_file(temp_file)
+        return ([], [], torch.zeros((1, 512, 512, 3)), f"❌ 錯誤: {str(e)}", "")
+
+
+# ======================
+# 分類節點 / Category Nodes
+# ======================
+
+class ReplicateVideoNode:
+    """🎬 影片生成節點 - 支援所有影片生成模型"""
+    
+    @classmethod
+    def INPUT_TYPES(cls):
+        models = get_model_names_by_group("video") if HAS_MODEL_CONFIGS else []
+        return {
+            "required": {
+                "model": (models, {
+                    "default": models[0] if models else "",
+                    "tooltip": "選擇影片生成模型 / Select video generation model"
+                }),
+            },
+            "optional": {
+                "prompt": ("STRING", {"default": "", "multiline": True,
+                    "tooltip": "提示詞 / Prompt"}),
+                "image": ("IMAGE", {
+                    "tooltip": "輸入圖片 / Input Image (Veo, Wan, LTX, P-Video)"}),
+                "input_reference": ("IMAGE", {
+                    "tooltip": "參考圖片 / Reference Image (Sora 2)"}),
+                "first_frame_image": ("IMAGE", {
+                    "tooltip": "首幀圖片 / First Frame (MiniMax, Hailuo)"}),
+                "last_frame": ("IMAGE", {
+                    "tooltip": "末幀圖片 / Last Frame (Veo)"}),
+                "start_image": ("IMAGE", {
+                    "tooltip": "起始圖片 / Start Image (Kling)"}),
+                "aspect_ratio": (["portrait", "landscape", "square", "1:1", "16:9", "9:16", "4:3", "3:4", "21:9", "9:21"], {
+                    "default": "landscape",
+                    "tooltip": "長寬比 / Aspect Ratio (Sora)"}),
+                "resolution": (["480p", "720p", "1080p"], {
+                    "default": "720p",
+                    "tooltip": "解析度 / Resolution (Veo)"}),
+                "quality": (["480p", "720p", "1080p"], {
+                    "default": "1080p",
+                    "tooltip": "品質 / Quality (PixVerse)"}),
+                "duration": ("INT", {
+                    "default": 8, "min": 1, "max": 30, "step": 1,
+                    "tooltip": "時長秒 / Duration (PixVerse, Hailuo, Seedance)"}),
+                "num_frames": ("INT", {
+                    "default": 81, "min": 1, "max": 200, "step": 1,
+                    "tooltip": "幀數 / Frames (Wan)"}),
+                "num_inference_steps": ("INT", {
+                    "default": 50, "min": 1, "max": 100, "step": 1,
+                    "tooltip": "推理步數 / Steps (Wan)"}),
+                "guidance_scale": ("FLOAT", {
+                    "default": 7.5, "min": 1.0, "max": 20.0, "step": 0.5,
+                    "tooltip": "引導比例 / Guidance Scale (Wan)"}),
+                "fps": ("INT", {
+                    "default": 6, "min": 1, "max": 30, "step": 1,
+                    "tooltip": "FPS (SVD)"}),
+                "motion_bucket_id": ("INT", {
+                    "default": 127, "min": 1, "max": 255, "step": 1,
+                    "tooltip": "運動強度 / Motion Bucket (SVD)"}),
+                "seed": ("INT", {
+                    "default": -1, "min": -1, "max": 2147483647, "step": 1,
+                    "tooltip": "種子 / Seed (-1=random)"}),
+                "camera_motion": (["none", "dolly_in", "dolly_out", "pan_left", "pan_right", "tilt_up", "tilt_down", "roll_cw", "roll_ccw"], {
+                    "default": "none",
+                    "tooltip": "鏡頭運動 / Camera Motion (LTX-2.3)"}),
+                "prompt_optimizer": ("BOOLEAN", {
+                    "default": True,
+                    "tooltip": "提示詞優化 / Prompt Optimizer (MiniMax)"}),
+                "prompt_upsampling": ("BOOLEAN", {
+                    "default": False,
+                    "tooltip": "提示詞增強 / Prompt Upsampling (P-Video)"}),
+            },
+        }
+    
+    RETURN_TYPES = ("REPLICATE_VIDEO", "REPLICATE_AUDIO", "IMAGE", "STRING")
+    RETURN_NAMES = ("video_paths", "audio_paths", "image", "info")
+    FUNCTION = "run_model"
+    CATEGORY = "replicate/video"
+    
+    def run_model(self, model, **kwargs):
+        result = _run_replicate_model(model, **kwargs)
+        return (result[0], result[1], result[2], result[3])
+
+
+class ReplicateEnhanceNode:
+    """🎭 影片增強節點 - 唇語同步、影片放大等"""
+    
+    @classmethod
+    def INPUT_TYPES(cls):
+        models = get_model_names_by_group("enhancement") if HAS_MODEL_CONFIGS else []
+        return {
+            "required": {
+                "model": (models, {
+                    "default": models[0] if models else "",
+                    "tooltip": "選擇影片增強模型 / Select enhancement model"
+                }),
+            },
+            "optional": {
+                "video": ("VIDEO", {
+                    "tooltip": "輸入影片 / Input Video"}),
+                "audio": ("AUDIO", {
+                    "tooltip": "輸入音訊 / Input Audio (Lipsync, Retalking)"}),
+                "face": ("IMAGE", {
+                    "tooltip": "人臉圖片 / Face Image (Retalking)"}),
+                "sync_mode": (["loop", "bounce", "cut_off", "silence", "remap"], {
+                    "default": "loop",
+                    "tooltip": "同步模式 / Sync Mode (Lipsync)"}),
+                "temperature": ("FLOAT", {
+                    "default": 0.5, "min": 0.0, "max": 1.0, "step": 0.1,
+                    "tooltip": "溫度 / Temperature (Lipsync)"}),
+                "active_speaker": ("BOOLEAN", {
+                    "default": False,
+                    "tooltip": "發言者偵測 / Active Speaker (Lipsync)"}),
+                "scale": ("INT", {
+                    "default": 2, "min": 1, "max": 4, "step": 1,
+                    "tooltip": "放大倍數 / Scale (ESRGAN)"}),
+                "face_enhance": ("BOOLEAN", {
+                    "default": False,
+                    "tooltip": "臉部增強 / Face Enhance (ESRGAN)"}),
+            },
+        }
+    
+    RETURN_TYPES = ("REPLICATE_VIDEO", "REPLICATE_AUDIO", "IMAGE", "STRING")
+    RETURN_NAMES = ("video_paths", "audio_paths", "image", "info")
+    FUNCTION = "run_model"
+    CATEGORY = "replicate/enhancement"
+    
+    def run_model(self, model, **kwargs):
+        result = _run_replicate_model(model, **kwargs)
+        return (result[0], result[1], result[2], result[3])
+
+
+class ReplicateAudioGenNode:
+    """🎵 音訊生成節點 - 音樂生成、音效、聲音克隆"""
+    
+    @classmethod
+    def INPUT_TYPES(cls):
+        models = get_model_names_by_group("audio") if HAS_MODEL_CONFIGS else []
+        return {
+            "required": {
+                "model": (models, {
+                    "default": models[0] if models else "",
+                    "tooltip": "選擇音訊模型 / Select audio model"
+                }),
+            },
+            "optional": {
+                "prompt": ("STRING", {"default": "", "multiline": True,
+                    "tooltip": "提示詞 / Prompt (MusicGen)"}),
+                "audio": ("AUDIO", {
+                    "tooltip": "輸入音訊 / Input Audio (Voice Cloning voice_file)"}),
+                "video": ("VIDEO", {
+                    "tooltip": "輸入影片 / Input Video (Video to SFX)"}),
+                "duration": ("INT", {
+                    "default": 8, "min": 1, "max": 30, "step": 1,
+                    "tooltip": "時長秒 / Duration (MusicGen)"}),
+                "model_version": (["stereo-large", "large", "medium", "small"], {
+                    "default": "stereo-large",
+                    "tooltip": "模型版本 / Model Version (MusicGen)"}),
+                "temperature": ("FLOAT", {
+                    "default": 1.0, "min": 0.0, "max": 2.0, "step": 0.1,
+                    "tooltip": "溫度 / Temperature (MusicGen)"}),
+                "num_samples": ("INT", {
+                    "default": 4, "min": 1, "max": 10, "step": 1,
+                    "tooltip": "樣本數 / Samples (Video to SFX)"}),
+            },
+        }
+    
+    RETURN_TYPES = ("REPLICATE_AUDIO", "STRING")
+    RETURN_NAMES = ("audio_paths", "info")
+    FUNCTION = "run_model"
+    CATEGORY = "replicate/audio"
+    
+    def run_model(self, model, **kwargs):
+        result = _run_replicate_model(model, **kwargs)
+        return (result[1], result[3])
+
+
+class ReplicateImageNode:
+    """🎨 圖片生成節點 - FLUX、Luma Photon 等"""
+    
+    @classmethod
+    def INPUT_TYPES(cls):
+        models = get_model_names_by_group("image") if HAS_MODEL_CONFIGS else []
+        return {
+            "required": {
+                "model": (models, {
+                    "default": models[0] if models else "",
+                    "tooltip": "選擇圖片生成模型 / Select image generation model"
+                }),
+            },
+            "optional": {
+                "prompt": ("STRING", {"default": "", "multiline": True,
+                    "tooltip": "提示詞 / Prompt"}),
+                "aspect_ratio": (["1:1", "16:9", "9:16", "4:3", "3:4", "21:9", "9:21"], {
+                    "default": "1:1",
+                    "tooltip": "長寬比 / Aspect Ratio"}),
+                "guidance": ("FLOAT", {
+                    "default": 3.5, "min": 1.5, "max": 5.0, "step": 0.1,
+                    "tooltip": "引導強度 / Guidance (FLUX Dev)"}),
+                "num_inference_steps": ("INT", {
+                    "default": 28, "min": 1, "max": 50, "step": 1,
+                    "tooltip": "推理步數 / Steps (FLUX Dev)"}),
+                "output_format": (["webp", "jpg", "png"], {
+                    "default": "webp",
+                    "tooltip": "輸出格式 / Output Format"}),
+                "output_quality": ("INT", {
+                    "default": 80, "min": 0, "max": 100, "step": 1,
+                    "tooltip": "輸出品質 / Output Quality"}),
+            },
+        }
+    
+    RETURN_TYPES = ("IMAGE", "STRING")
+    RETURN_NAMES = ("image", "info")
+    FUNCTION = "run_model"
+    CATEGORY = "replicate/image"
+    
+    def run_model(self, model, **kwargs):
+        result = _run_replicate_model(model, **kwargs)
+        return (result[2], result[3])
+
+
+class Replicate3DNode:
+    """🧊 3D 模型生成節點"""
+    
+    @classmethod
+    def INPUT_TYPES(cls):
+        models = get_model_names_by_group("3d") if HAS_MODEL_CONFIGS else []
+        return {
+            "required": {
+                "model": (models, {
+                    "default": models[0] if models else "",
+                    "tooltip": "選擇 3D 生成模型 / Select 3D generation model"
+                }),
+            },
+            "optional": {
+                "prompt": ("STRING", {"default": "", "multiline": True,
+                    "tooltip": "提示詞 / Prompt"}),
+            },
+        }
+    
+    RETURN_TYPES = ("STRING", "STRING")
+    RETURN_NAMES = ("file_path", "info")
+    FUNCTION = "run_model"
+    CATEGORY = "replicate/3d"
+    
+    def run_model(self, model, **kwargs):
+        result = _run_replicate_model(model, **kwargs)
+        return (result[4], result[3])
+
+
+# ======================
 # 節點註冊
 # ======================
 
@@ -1055,8 +1322,15 @@ NODE_CLASS_MAPPINGS = {
     "SyncLipsyncNode": SyncLipsyncNode,
     "SyncVideoOutput": SyncVideoOutput,
     
-    # 動態節點
+    # 動態節點 (向後相容)
     "ReplicateDynamicNode": ReplicateDynamicNode,
+    
+    # 分類節點 / Category Nodes
+    "ReplicateVideoNode": ReplicateVideoNode,
+    "ReplicateEnhanceNode": ReplicateEnhanceNode,
+    "ReplicateAudioGenNode": ReplicateAudioGenNode,
+    "ReplicateImageNode": ReplicateImageNode,
+    "Replicate3DNode": Replicate3DNode,
     
     # 資訊節點
     "ReplicateModelInfo": ReplicateModelInfo,
@@ -1066,7 +1340,7 @@ NODE_CLASS_MAPPINGS = {
     "ReplicateAudioOutput": ReplicateAudioOutput,
     "ReplicateVideoAudioMerge": ReplicateVideoAudioMerge,
     
-    # 專門化節點
+    # 專門化節點 (舊版)
     "ReplicateTextToVideoNode": ReplicateTextToVideoNode,
     "ReplicateImageToVideoNode": ReplicateImageToVideoNode,
     "ReplicateImageGenNode": ReplicateImageGenNode,
@@ -1078,8 +1352,15 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "SyncLipsyncNode": "🎭 Sync Lipsync 生成 / Generate",
     "SyncVideoOutput": "📹 Sync 影片輸出 / Video Output",
     
-    # 動態節點 / Dynamic Node (主要節點 Main Node)
+    # 動態節點 (向後相容)
     "ReplicateDynamicNode": "🎬 Replicate 動態 / Dynamic (All Models)",
+    
+    # 分類節點 / Category Nodes
+    "ReplicateVideoNode": "🎬 影片生成 / Video Generation",
+    "ReplicateEnhanceNode": "🎭 影片增強 / Video Enhancement",
+    "ReplicateAudioGenNode": "🎵 音訊生成 / Audio Generation",
+    "ReplicateImageNode": "🎨 圖片生成 / Image Generation",
+    "Replicate3DNode": "🧊 3D 生成 / 3D Generation",
     
     # 資訊節點 / Info Node
     "ReplicateModelInfo": "📋 模型資訊 / Model Info",
@@ -1089,8 +1370,8 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "ReplicateAudioOutput": "🎵 Replicate 音訊 / Audio Output",
     "ReplicateVideoAudioMerge": "🔄 合併影音 / Merge Video+Audio",
     
-    # 專門化節點 / Specialized Nodes
+    # 專門化節點 (舊版) / Specialized Nodes (Legacy)
     "ReplicateTextToVideoNode": "🎬 文字轉影片 / Text to Video",
     "ReplicateImageToVideoNode": "🖼️ 圖片轉影片 / Image to Video",
-    "ReplicateImageGenNode": "🎨 圖片生成 / Image Generation",
+    "ReplicateImageGenNode": "🎨 圖片生成(舊) / Image Gen (Legacy)",
 }
