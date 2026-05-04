@@ -300,7 +300,10 @@ class ReplicateDynamicNode:
                 "start_image": ("IMAGE", {
                     "tooltip": "起始幀圖片 / Start Image - Kling 使用 / Used for Kling"
                 }),
-                
+                "reference_images": ("IMAGE", {
+                    "tooltip": "參考圖片 batch / Reference Images batch - Seedance 2.0 使用 / Used for Seedance 2.0"
+                }),
+
                 # === 影片/音訊輸入 / Video/Audio Inputs ===
                 "video": ("VIDEO", {
                     "tooltip": "輸入影片 / Input Video - Lipsync 使用 / Used for Lipsync"
@@ -377,6 +380,10 @@ class ReplicateDynamicNode:
                 "prompt_optimizer": ("BOOLEAN", {
                     "default": True,
                     "tooltip": "提示詞優化 / Prompt Optimizer - MiniMax 使用 / Used for MiniMax"
+                }),
+                "generate_audio": ("BOOLEAN", {
+                    "default": True,
+                    "tooltip": "生成音訊 / Generate Audio - Seedance 2.0 使用 / Used for Seedance 2.0"
                 }),
                 "face_enhance": ("BOOLEAN", {
                     "default": False,
@@ -934,6 +941,25 @@ def _run_replicate_model(model_id, prompt="", image=None, input_reference=None,
             'last_frame': last_frame,
             'start_image': start_image,
         }
+
+        def _upload_image_batch(tensor):
+            """將批次圖片張量逐張存檔上傳，回傳 URL 清單"""
+            arr = tensor.cpu().numpy() if isinstance(tensor, torch.Tensor) else tensor
+            if not hasattr(arr, 'shape'):
+                return []
+            if len(arr.shape) == 3:
+                arr = arr[None, ...]
+            urls = []
+            for i in range(arr.shape[0]):
+                single = arr[i:i+1]
+                path = ImageUtils.save_image_tensor(single)
+                if not path:
+                    continue
+                temp_files.append(path)
+                url = api.upload_file(path)
+                if url:
+                    urls.append(url)
+            return urls
         
         for input_name, input_config in model_inputs.items():
             input_type = input_config.get("type")
@@ -949,7 +975,7 @@ def _run_replicate_model(model_id, prompt="", image=None, input_reference=None,
                     image_param = image_map[input_name]
                 elif input_name in kwargs:
                     image_param = kwargs[input_name]
-                
+
                 if image_param is not None:
                     image_path = ImageUtils.save_image_tensor(image_param)
                     if image_path:
@@ -959,6 +985,20 @@ def _run_replicate_model(model_id, prompt="", image=None, input_reference=None,
                             inputs[input_name] = image_url
                 elif is_required:
                     print(f"⚠️ 必要圖片參數 '{input_name}' 未提供")
+
+            elif input_type == "IMAGE_LIST":
+                image_param = None
+                if input_name in image_map:
+                    image_param = image_map[input_name]
+                elif input_name in kwargs:
+                    image_param = kwargs[input_name]
+
+                if image_param is not None:
+                    urls = _upload_image_batch(image_param)
+                    if urls:
+                        inputs[input_name] = urls
+                elif is_required:
+                    print(f"⚠️ 必要圖片清單 '{input_name}' 未提供")
                     
             elif input_type == "VIDEO":
                 if video is not None:
@@ -978,8 +1018,15 @@ def _run_replicate_model(model_id, prompt="", image=None, input_reference=None,
                             inputs[input_name] = audio_url
                             
             elif input_type in ["COMBO", "FLOAT", "INT", "BOOLEAN"]:
-                if input_name in kwargs and kwargs[input_name] is not None:
-                    inputs[input_name] = kwargs[input_name]
+                value = kwargs.get(input_name) if input_name in kwargs else None
+                if input_type == "COMBO":
+                    allowed = input_config.get("options", [])
+                    if value is not None and allowed and value not in allowed:
+                        fallback = input_config.get("default", allowed[0])
+                        print(f"⚠️ '{input_name}'='{value}' 不被 {model_id} 支援，改用 '{fallback}' (允許值: {allowed})")
+                        value = fallback
+                if value is not None:
+                    inputs[input_name] = value
                 elif is_required and "default" in input_config:
                     inputs[input_name] = input_config["default"]
         
@@ -1095,9 +1142,11 @@ class ReplicateVideoNode:
                     "tooltip": "末幀圖片 / Last Frame (Veo)"}),
                 "start_image": ("IMAGE", {
                     "tooltip": "起始圖片 / Start Image (Kling)"}),
+                "reference_images": ("IMAGE", {
+                    "tooltip": "參考圖片 (可多張，使用 batch) / Reference Images batch (Seedance 2.0)"}),
                 "aspect_ratio": (["portrait", "landscape", "square", "1:1", "16:9", "9:16", "4:3", "3:4", "21:9", "9:21"], {
                     "default": "landscape",
-                    "tooltip": "長寬比 / Aspect Ratio (Sora)"}),
+                    "tooltip": "長寬比 / Aspect Ratio (Sora, Seedance)"}),
                 "resolution": (["480p", "720p", "1080p"], {
                     "default": "720p",
                     "tooltip": "解析度 / Resolution (Veo)"}),
@@ -1134,14 +1183,17 @@ class ReplicateVideoNode:
                 "prompt_upsampling": ("BOOLEAN", {
                     "default": False,
                     "tooltip": "提示詞增強 / Prompt Upsampling (P-Video)"}),
+                "generate_audio": ("BOOLEAN", {
+                    "default": True,
+                    "tooltip": "生成音訊 / Generate Audio (Seedance 2.0)"}),
             },
         }
-    
+
     RETURN_TYPES = ("REPLICATE_VIDEO", "REPLICATE_AUDIO", "IMAGE", "STRING")
     RETURN_NAMES = ("video_paths", "audio_paths", "image", "info")
     FUNCTION = "run_model"
     CATEGORY = "replicate/video"
-    
+
     def run_model(self, model, **kwargs):
         result = _run_replicate_model(model, **kwargs)
         return (result[0], result[1], result[2], result[3])
