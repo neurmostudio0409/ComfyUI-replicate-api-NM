@@ -303,6 +303,9 @@ class ReplicateDynamicNode:
                 "reference_images": ("IMAGE", {
                     "tooltip": "參考圖片 batch / Reference Images batch - Seedance 2.0 使用 / Used for Seedance 2.0"
                 }),
+                "image_input": ("REPLICATE_IMAGE_LIST", {
+                    "tooltip": "多張參考圖片 / Multi reference images - Nano Banana 使用，接多圖輸入節點 / Used for Nano Banana, connect Multi Image Input node"
+                }),
 
                 # === 影片/音訊輸入 / Video/Audio Inputs ===
                 "video": ("VIDEO", {
@@ -313,13 +316,13 @@ class ReplicateDynamicNode:
                 }),
                 
                 # === Sora/Veo 參數 / Sora/Veo Parameters ===
-                "aspect_ratio": (["portrait", "landscape", "square", "1:1", "16:9", "9:16", "4:3", "3:4", "21:9", "9:21"], {
+                "aspect_ratio": (["portrait", "landscape", "square", "match_input_image", "1:1", "16:9", "9:16", "4:3", "3:4", "2:3", "3:2", "4:5", "5:4", "21:9", "9:21"], {
                     "default": "landscape",
-                    "tooltip": "長寬比 / Aspect Ratio - Sora, FLUX 使用 / Used for Sora, FLUX"
+                    "tooltip": "長寬比 / Aspect Ratio - Sora, FLUX, Nano Banana 使用 / Used for Sora, FLUX, Nano Banana"
                 }),
-                "resolution": (["480p", "720p", "1080p"], {
+                "resolution": (["480p", "720p", "1080p", "1K", "2K", "4K"], {
                     "default": "720p",
-                    "tooltip": "解析度 / Resolution - Veo 使用 / Used for Veo"
+                    "tooltip": "解析度 / Resolution - Veo, Nano Banana 使用 / Used for Veo, Nano Banana"
                 }),
                 "quality": (["480p", "720p", "1080p"], {
                     "default": "1080p",
@@ -943,7 +946,13 @@ def _run_replicate_model(model_id, prompt="", image=None, input_reference=None,
         }
 
         def _upload_image_batch(tensor):
-            """將批次圖片張量逐張存檔上傳，回傳 URL 清單"""
+            """將批次圖片張量逐張存檔上傳，回傳 URL 清單
+            支援：IMAGE batch 張量、REPLICATE_IMAGE_LIST (張量清單，各圖尺寸可不同)"""
+            if isinstance(tensor, (list, tuple)):
+                urls = []
+                for item in tensor:
+                    urls.extend(_upload_image_batch(item))
+                return urls
             arr = tensor.cpu().numpy() if isinstance(tensor, torch.Tensor) else tensor
             if not hasattr(arr, 'shape'):
                 return []
@@ -999,7 +1008,11 @@ def _run_replicate_model(model_id, prompt="", image=None, input_reference=None,
                         inputs[input_name] = urls
                 elif is_required:
                     print(f"⚠️ 必要圖片清單 '{input_name}' 未提供")
-                    
+
+            elif input_type == "API_TOKEN":
+                # 模型需要使用者的 Replicate API token (例如 nano-banana-2-transparent)
+                inputs[input_name] = api.api_token
+
             elif input_type == "VIDEO":
                 if video is not None:
                     video_path = _extract_video_path(video)
@@ -1078,9 +1091,15 @@ def _run_replicate_model(model_id, prompt="", image=None, input_reference=None,
         # 載入圖片結果
         if not video_path and not file_path and result and isinstance(result, str) and os.path.exists(result):
             try:
-                img = cv2.imread(result)
+                img = cv2.imread(result, cv2.IMREAD_UNCHANGED)
                 if img is not None:
-                    img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                    if len(img.shape) == 2:
+                        img_rgb = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
+                    elif img.shape[2] == 4:
+                        # 保留透明度 (nano-banana-2-transparent 等去背模型)
+                        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGRA2RGBA)
+                    else:
+                        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
                     first_frame = torch.from_numpy(img_rgb).float() / 255.0
                     first_frame = first_frame.unsqueeze(0)
                     file_path = result
@@ -1110,6 +1129,49 @@ def _run_replicate_model(model_id, prompt="", image=None, input_reference=None,
         for temp_file in temp_files:
             cleanup_temp_file(temp_file)
         return ([], [], torch.zeros((1, 512, 512, 3)), f"❌ 錯誤: {str(e)}", "")
+
+
+# ======================
+# 輸入節點 / Input Nodes
+# ======================
+
+class ReplicateMultiImageInput:
+    """
+    🖼️ 多圖輸入節點 - 將多張圖片合併為圖片清單
+    各圖片尺寸可以不同（不需要相同大小的 batch）
+    可透過 image_list 輸入串接多個此節點以載入更多圖片
+    """
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {},
+            "optional": {
+                "image_1": ("IMAGE", {"tooltip": "圖片 1 / Image 1"}),
+                "image_2": ("IMAGE", {"tooltip": "圖片 2 / Image 2"}),
+                "image_3": ("IMAGE", {"tooltip": "圖片 3 / Image 3"}),
+                "image_4": ("IMAGE", {"tooltip": "圖片 4 / Image 4"}),
+                "image_5": ("IMAGE", {"tooltip": "圖片 5 / Image 5"}),
+                "image_6": ("IMAGE", {"tooltip": "圖片 6 / Image 6"}),
+                "image_list": ("REPLICATE_IMAGE_LIST", {
+                    "tooltip": "串接另一個多圖輸入節點 / Chain another Multi Image Input node"}),
+            },
+        }
+
+    RETURN_TYPES = ("REPLICATE_IMAGE_LIST",)
+    RETURN_NAMES = ("image_list",)
+    FUNCTION = "combine_images"
+    CATEGORY = "replicate/input"
+
+    def combine_images(self, image_list=None, **kwargs):
+        """合併多張圖片為清單（保留各自尺寸）"""
+        images = list(image_list) if image_list else []
+        for i in range(1, 7):
+            img = kwargs.get(f"image_{i}")
+            if img is not None:
+                images.append(img)
+        print(f"🖼️ 多圖輸入: 共 {len(images)} 個圖片輸入")
+        return (images,)
 
 
 # ======================
@@ -1308,9 +1370,16 @@ class ReplicateImageNode:
             "optional": {
                 "prompt": ("STRING", {"default": "", "multiline": True,
                     "tooltip": "提示詞 / Prompt"}),
-                "aspect_ratio": (["1:1", "16:9", "9:16", "4:3", "3:4", "21:9", "9:21"], {
+                "image": ("IMAGE", {
+                    "tooltip": "輸入圖片 / Input Image (Nano Banana Transparent 去背)"}),
+                "image_input": ("REPLICATE_IMAGE_LIST", {
+                    "tooltip": "多張參考圖片 / Multi reference images (Nano Banana - 使用多圖輸入節點 / use Multi Image Input node)"}),
+                "aspect_ratio": (["match_input_image", "1:1", "16:9", "9:16", "4:3", "3:4", "2:3", "3:2", "4:5", "5:4", "21:9", "9:21"], {
                     "default": "1:1",
-                    "tooltip": "長寬比 / Aspect Ratio"}),
+                    "tooltip": "長寬比 / Aspect Ratio (match_input_image: Nano Banana)"}),
+                "resolution": (["1K", "2K", "4K"], {
+                    "default": "1K",
+                    "tooltip": "解析度 / Resolution (Nano Banana)"}),
                 "guidance": ("FLOAT", {
                     "default": 3.5, "min": 1.5, "max": 5.0, "step": 0.1,
                     "tooltip": "引導強度 / Guidance (FLUX Dev)"}),
@@ -1319,10 +1388,22 @@ class ReplicateImageNode:
                     "tooltip": "推理步數 / Steps (FLUX Dev)"}),
                 "output_format": (["webp", "jpg", "png"], {
                     "default": "webp",
-                    "tooltip": "輸出格式 / Output Format"}),
+                    "tooltip": "輸出格式 / Output Format (Nano Banana 僅支援 jpg/png)"}),
                 "output_quality": ("INT", {
                     "default": 80, "min": 0, "max": 100, "step": 1,
                     "tooltip": "輸出品質 / Output Quality"}),
+                "image_search": ("BOOLEAN", {
+                    "default": False,
+                    "tooltip": "Google 圖片搜尋參考 / Image Search grounding (Nano Banana 2)"}),
+                "google_search": ("BOOLEAN", {
+                    "default": False,
+                    "tooltip": "Google 網頁搜尋 / Web Search grounding (Nano Banana 2)"}),
+                "alpha_ceil": ("INT", {
+                    "default": 250, "min": 0, "max": 255, "step": 1,
+                    "tooltip": "透明度上限 / Alpha Ceil (Nano Banana Transparent)"}),
+                "alpha_floor": ("INT", {
+                    "default": 6, "min": 0, "max": 255, "step": 1,
+                    "tooltip": "透明度下限 / Alpha Floor (Nano Banana Transparent)"}),
             },
         }
     
@@ -1376,7 +1457,10 @@ NODE_CLASS_MAPPINGS = {
     
     # 動態節點 (向後相容)
     "ReplicateDynamicNode": ReplicateDynamicNode,
-    
+
+    # 輸入節點 / Input Nodes
+    "ReplicateMultiImageInput": ReplicateMultiImageInput,
+
     # 分類節點 / Category Nodes
     "ReplicateVideoNode": ReplicateVideoNode,
     "ReplicateEnhanceNode": ReplicateEnhanceNode,
@@ -1406,7 +1490,10 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     
     # 動態節點 (向後相容)
     "ReplicateDynamicNode": "🎬 Replicate 動態 / Dynamic (All Models)",
-    
+
+    # 輸入節點 / Input Nodes
+    "ReplicateMultiImageInput": "🖼️ 多圖輸入 / Multi Image Input",
+
     # 分類節點 / Category Nodes
     "ReplicateVideoNode": "🎬 影片生成 / Video Generation",
     "ReplicateEnhanceNode": "🎭 影片增強 / Video Enhancement",

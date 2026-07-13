@@ -417,6 +417,57 @@ REPLICATE_MODELS = {
         "return_type": "IMAGE",
     },
 
+    "nano-banana-pro": {
+        "name": "google/nano-banana-pro",
+        "display_name": "Google Nano Banana Pro",
+        "category": "image/generation",
+        "description": "Nano Banana Pro - Google 最先進的圖片生成與編輯模型，支援多張參考圖 / Google's state-of-the-art image generation and editing, supports multi-image input",
+        "inputs": {
+            "prompt": {"type": "STRING", "required": True, "multiline": True},
+            "image_input": {"type": "IMAGE_LIST", "required": False},
+            "resolution": {"type": "COMBO", "options": ["1K", "2K", "4K"], "default": "2K"},
+            "aspect_ratio": {"type": "COMBO", "options": ["match_input_image", "1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"], "default": "match_input_image"},
+            "output_format": {"type": "COMBO", "options": ["jpg", "png"], "default": "jpg"},
+            "safety_filter_level": {"type": "COMBO", "options": ["block_low_and_above", "block_medium_and_above", "block_only_high"], "default": "block_only_high"},
+        },
+        "outputs": ["image"],
+        "return_type": "IMAGE",
+    },
+
+    "nano-banana-2": {
+        "name": "google/nano-banana-2",
+        "display_name": "Google Nano Banana 2",
+        "category": "image/generation",
+        "description": "Nano Banana 2 - Google 快速圖片生成，支援對話式編輯、多圖融合 / Google's fast image generation with multi-image fusion and character consistency",
+        "inputs": {
+            "prompt": {"type": "STRING", "required": True, "multiline": True},
+            "image_input": {"type": "IMAGE_LIST", "required": False},
+            "resolution": {"type": "COMBO", "options": ["1K", "2K", "4K"], "default": "1K"},
+            "aspect_ratio": {"type": "COMBO", "options": ["match_input_image", "1:1", "1:4", "1:8", "2:3", "3:2", "3:4", "4:1", "4:3", "4:5", "5:4", "8:1", "9:16", "16:9", "21:9"], "default": "match_input_image"},
+            "output_format": {"type": "COMBO", "options": ["jpg", "png"], "default": "jpg"},
+            "image_search": {"type": "BOOLEAN", "default": False},
+            "google_search": {"type": "BOOLEAN", "default": False},
+        },
+        "outputs": ["image"],
+        "return_type": "IMAGE",
+    },
+
+    "nano-banana-2-transparent": {
+        "name": "jide/nano-banana-2-transparent:689fe27ffec145cc7e3d76ee4778ab3b0f24bd72eca62f4f534d562f062a2e1d",
+        "display_name": "Nano Banana 2 Transparent (去背)",
+        "category": "image/generation",
+        "description": "透明去背 - 生成含真實 RGBA 透明度的圖片，乾淨邊緣與半透明 / RGBA transparency via triangulation matting - clean edges and semi-transparency",
+        "inputs": {
+            "image": {"type": "IMAGE", "required": True},
+            "prompt": {"type": "STRING", "required": False, "multiline": True},
+            "alpha_ceil": {"type": "INT", "default": 250, "min": 0, "max": 255, "step": 1},
+            "alpha_floor": {"type": "INT", "default": 6, "min": 0, "max": 255, "step": 1},
+            "replicate_api_token": {"type": "API_TOKEN", "required": True},
+        },
+        "outputs": ["image"],
+        "return_type": "IMAGE",
+    },
+
     # ===== 3D Generation Models =====
     "hunyuan-3d-3.1": {
         "name": "tencent/hunyuan-3d-3.1",

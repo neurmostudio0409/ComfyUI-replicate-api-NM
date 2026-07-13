@@ -8,6 +8,7 @@ __pycache__/
 *$py.class
 *.so
 .Python
+.mcp.json
 
 # Virtual environments
 venv/
