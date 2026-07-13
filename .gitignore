@@ -9,6 +9,7 @@ __pycache__/
 *.so
 .Python
 .mcp.json
+.pytest_cache/
 
 # Virtual environments
 venv/

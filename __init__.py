@@ -4,7 +4,12 @@ ComfyUI Replicate API 整合模組
 """
 
 import os
-from .replicate_nodes import NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS
+
+try:
+    from .replicate_nodes import NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS
+except ImportError:
+    # 以頂層模組方式匯入時（例如 pytest 收集）改用絕對匯入
+    from replicate_nodes import NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS
 
 # 載入 API token
 def load_api_token():
