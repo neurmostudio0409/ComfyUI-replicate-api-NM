@@ -39,6 +39,9 @@ except ImportError:
         @staticmethod
         def get_output_directory():
             return os.path.join(os.getcwd(), "output")
+        @staticmethod
+        def get_input_directory():
+            return os.path.join(os.getcwd(), "input")
     folder_paths = FolderPaths()
 
 
@@ -1146,15 +1149,21 @@ def _run_replicate_model(model_id, prompt="", image=None, input_reference=None,
 
 class ReplicateMultiImageInput:
     """
-    🖼️ 多圖輸入節點 - 將多張圖片合併為圖片清單
+    🖼️ 多圖輸入節點 - 從路徑載入多張圖片為圖片清單
+    image_paths：每行一個圖片路徑（絕對路徑，或相對於 ComfyUI input 目錄）
     各圖片尺寸可以不同（不需要相同大小的 batch）
-    可透過 image_list 輸入串接多個此節點以載入更多圖片
+    也可用 image_1~6 接線輸入，或透過 image_list 串接多個此節點
+    合併順序：image_list → image_1~6 → image_paths
     """
 
     @classmethod
     def INPUT_TYPES(cls):
         return {
-            "required": {},
+            "required": {
+                "image_paths": ("STRING", {
+                    "default": "", "multiline": True,
+                    "tooltip": "每行一個圖片路徑（絕對路徑或相對於 ComfyUI input 目錄）/ One image path per line (absolute, or relative to the ComfyUI input directory)"}),
+            },
             "optional": {
                 "image_1": ("IMAGE", {"tooltip": "圖片 1 / Image 1"}),
                 "image_2": ("IMAGE", {"tooltip": "圖片 2 / Image 2"}),
@@ -1172,13 +1181,70 @@ class ReplicateMultiImageInput:
     FUNCTION = "combine_images"
     CATEGORY = "replicate/input"
 
-    def combine_images(self, image_list=None, **kwargs):
-        """合併多張圖片為清單（保留各自尺寸）"""
+    @staticmethod
+    def _parse_paths(image_paths):
+        """解析多行路徑文字，去除空行與引號（Windows「複製路徑」會帶引號）"""
+        paths = []
+        for line in (image_paths or "").split("\n"):
+            path = line.strip().strip('"').strip("'")
+            if path:
+                paths.append(path)
+        return paths
+
+    @staticmethod
+    def _resolve_path(path):
+        """回傳存在的完整路徑；找不到時回傳 None"""
+        if os.path.exists(path):
+            return path
+        full_path = os.path.join(folder_paths.get_input_directory(), path)
+        if os.path.exists(full_path):
+            return full_path
+        return None
+
+    @classmethod
+    def _load_image_from_path(cls, path):
+        """從路徑載入圖片為 [1,H,W,3] 張量（處理 EXIF 方向）"""
+        full_path = cls._resolve_path(path)
+        if full_path is None:
+            print(f"⚠️ 找不到圖片: {path}")
+            return None
+        try:
+            from PIL import Image, ImageOps
+            image = Image.open(full_path)
+            image = ImageOps.exif_transpose(image)
+            image = image.convert("RGB")
+            arr = np.array(image).astype(np.float32) / 255.0
+            return torch.from_numpy(arr)[None,]
+        except Exception as e:
+            print(f"⚠️ 載入圖片失敗 {path}: {e}")
+            return None
+
+    @classmethod
+    def IS_CHANGED(cls, image_paths="", **kwargs):
+        """路徑指向的檔案變更時重新執行"""
+        parts = []
+        for path in cls._parse_paths(image_paths):
+            full_path = cls._resolve_path(path)
+            if full_path:
+                try:
+                    parts.append(f"{full_path}:{os.path.getmtime(full_path)}")
+                except OSError:
+                    parts.append(f"{full_path}:unreadable")
+            else:
+                parts.append(f"{path}:missing")
+        return "|".join(parts)
+
+    def combine_images(self, image_paths="", image_list=None, **kwargs):
+        """合併串接清單、接線圖片與路徑載入的圖片（保留各自尺寸）"""
         images = list(image_list) if image_list else []
         for i in range(1, 7):
             img = kwargs.get(f"image_{i}")
             if img is not None:
                 images.append(img)
+        for path in self._parse_paths(image_paths):
+            tensor = self._load_image_from_path(path)
+            if tensor is not None:
+                images.append(tensor)
         print(f"🖼️ 多圖輸入: 共 {len(images)} 個圖片輸入")
         return (images,)
 

@@ -28,7 +28,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install numpy replicate python-dotenv requests pytest
-          pip install opencv-python-headless soundfile
+          pip install opencv-python-headless soundfile pillow
 
       - name: Run tests
         run: pytest tests/ -v

@@ -55,7 +55,7 @@ python main.py
 ### 主要節點
 
 - **🎬 Replicate (動態)** - 通用節點，支援所有模型，動態參數顯示
-- **🖼️ 多圖輸入** - 合併多張圖片為圖片清單（各圖尺寸可不同，可串接載入更多）
+- **🖼️ 多圖輸入** - 貼上多行圖片路徑一次載入多張（每行一個路徑，支援絕對路徑或 ComfyUI input 目錄相對路徑），也可接線輸入；各圖尺寸可不同，可串接載入更多
 - **📹 Replicate 影片輸出** - 將影片路徑轉換為 VIDEO 格式
 - **🎵 Replicate 音訊輸出** - 輸出音訊檔案
 - **🔄 合併影片與音訊** - 使用 FFmpeg 合併
@@ -96,10 +96,17 @@ python main.py
 
 ### Nano Banana 多圖參考生成
 
-1. 新增「🖼️ 多圖輸入」節點，接上 2~6 張參考圖（要更多張可串接第二個多圖輸入節點）
+1. 新增「🖼️ 多圖輸入」節點，在 `image_paths` 貼上圖片路徑（每行一個，可直接用檔案總管「複製路徑」貼上，引號會自動去除）；也可用 image_1~6 接線輸入
 2. 新增「🎨 圖片生成」節點，選擇模型：`nano-banana-pro` 或 `nano-banana-2`
 3. 將多圖輸入的 `image_list` 接到圖片生成節點的 `image_input`
 4. 輸入提示詞，選擇解析度（1K/2K/4K）與長寬比（`match_input_image` 可跟隨輸入圖）
+
+```
+image_paths 範例：
+D:\photos\ref1.jpg
+"C:\Users\me\Pictures\ref 2.png"
+my_input_image.png        ← ComfyUI input 目錄內的檔案
+```
 
 ### 透明去背（Nano Banana 2 Transparent）
 
@@ -187,6 +194,10 @@ sudo apt-get install ffmpeg
 
 ## 更新日誌
 
+### v2.3 (2026-07)
+- ✅ 多圖輸入節點改版：支援貼上多行圖片路徑直接載入（每行一個，自動處理引號與 EXIF 方向，支援 input 目錄相對路徑）
+- ✅ 檔案變更自動偵測（IS_CHANGED，改圖後重跑會重新載入）
+
 ### v2.2 (2026-07)
 - ✅ 新增 Google Nano Banana Pro / Nano Banana 2 圖片生成模型
 - ✅ 新增 Nano Banana 2 Transparent 透明去背模型（RGBA 輸出）
@@ -234,7 +245,7 @@ Universal Replicate API integration module supporting multiple AI models (Sora 2
 🎬 **Video Generation** - Sora 2, Veo 3.1, MiniMax, Wan, SVD, Seedance, Kling, LTX  
 🎭 **Lipsync** - Sync Lipsync 2 Pro  
 🎨 **Image Generation** - Nano Banana Pro/2 (incl. transparent matting), FLUX Schnell, FLUX Dev, Luma Photon  
-🖼️ **Multi Image Input** - Feed up to 14 reference images of different sizes  
+🖼️ **Multi Image Input** - Paste multiple image paths (one per line) to load them at once; sizes can differ, up to 14 images  
 🔊 **Audio Support** - Independent audio output and merge functionality  
 
 ### Quick Start
@@ -391,6 +402,10 @@ sudo apt-get install ffmpeg
 Refer to `model_configs.py` for model configurations and ensure all required parameters are provided.
 
 ### Changelog
+
+#### v2.3 (2026-07)
+- ✅ Multi Image Input rework: load images by pasting multi-line file paths (quote stripping, EXIF orientation, ComfyUI input-dir relative paths)
+- ✅ Auto re-run on file changes (IS_CHANGED)
 
 #### v2.2 (2026-07)
 - ✅ Added Google Nano Banana Pro / Nano Banana 2 image generation models

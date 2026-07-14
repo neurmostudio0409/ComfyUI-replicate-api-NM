@@ -52,6 +52,52 @@ def test_multi_image_empty(nodes):
     assert result == []
 
 
+def test_multi_image_load_from_paths(nodes, tmp_path):
+    from PIL import Image
+    p1 = tmp_path / "a.png"
+    p2 = tmp_path / "b.png"
+    Image.new("RGB", (64, 48), (255, 0, 0)).save(p1)
+    Image.new("RGB", (32, 32), (0, 255, 0)).save(p2)
+
+    node = nodes.ReplicateMultiImageInput()
+    # 第二行帶引號（模擬 Windows「複製路徑」），中間夾空行
+    text = f'{p1}\n\n"{p2}"\n'
+    (result,) = node.combine_images(image_paths=text)
+    assert len(result) == 2
+    assert tuple(result[0].shape) == (1, 48, 64, 3)  # [B,H,W,C]
+    assert tuple(result[1].shape) == (1, 32, 32, 3)
+
+
+def test_multi_image_missing_path_skipped(nodes):
+    node = nodes.ReplicateMultiImageInput()
+    (result,) = node.combine_images(image_paths="Z:/not/exists/nope.png")
+    assert result == []
+
+
+def test_multi_image_paths_and_wired_combined(nodes, tmp_path):
+    from PIL import Image
+    p1 = tmp_path / "c.png"
+    Image.new("RGB", (16, 16), (0, 0, 255)).save(p1)
+
+    node = nodes.ReplicateMultiImageInput()
+    wired = torch.zeros((1, 8, 8, 3))
+    (result,) = node.combine_images(image_paths=str(p1), image_1=wired)
+    # 順序：接線圖片在前，路徑載入在後
+    assert len(result) == 2
+    assert tuple(result[0].shape) == (1, 8, 8, 3)
+    assert tuple(result[1].shape) == (1, 16, 16, 3)
+
+
+def test_multi_image_is_changed_tracks_mtime(nodes, tmp_path):
+    from PIL import Image
+    p1 = tmp_path / "d.png"
+    Image.new("RGB", (8, 8)).save(p1)
+    key1 = nodes.ReplicateMultiImageInput.IS_CHANGED(image_paths=str(p1))
+    assert str(p1) in key1 and "missing" not in key1
+    key_missing = nodes.ReplicateMultiImageInput.IS_CHANGED(image_paths="Z:/no/such.png")
+    assert "missing" in key_missing
+
+
 # ======================
 # 節點輸入定義
 # ======================
