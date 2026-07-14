@@ -75,6 +75,7 @@ python main.py
 
 ### 影片生成
 - **Sora 2** (openai/sora-2) - OpenAI 文字/圖片轉影片
+- **Grok Imagine Video** (xai/grok-imagine-video) - xAI 文字/圖片轉影片與影片編輯
 - **Veo 3.1 Fast** (google/veo-3.1-fast) - Google 圖片轉影片
 - **MiniMax Video-01** - 文字/圖片轉影片
 - **Wan** (lucataco/wan) - 圖片轉影片
@@ -195,6 +196,7 @@ sudo apt-get install ffmpeg
 ## 更新日誌
 
 ### v2.3 (2026-07)
+- ✅ 新增 xAI Grok Imagine Video 模型（文字/圖片轉影片、影片編輯模式）
 - ✅ 多圖輸入節點改版：支援貼上多行圖片路徑直接載入（每行一個，自動處理引號與 EXIF 方向，支援 input 目錄相對路徑）
 - ✅ 檔案變更自動偵測（IS_CHANGED，改圖後重跑會重新載入）
 
@@ -305,6 +307,7 @@ python main.py
 
 #### Video Generation
 - **Sora 2** (openai/sora-2) - OpenAI text/image-to-video
+- **Grok Imagine Video** (xai/grok-imagine-video) - xAI text/image-to-video and video editing
 - **Veo 3.1 Fast** (google/veo-3.1-fast) - Google image-to-video
 - **MiniMax Video-01** - Text/image-to-video
 - **Wan** (lucataco/wan) - Image-to-video
@@ -404,6 +407,7 @@ Refer to `model_configs.py` for model configurations and ensure all required par
 ### Changelog
 
 #### v2.3 (2026-07)
+- ✅ Added xAI Grok Imagine Video model (text/image-to-video, video editing mode)
 - ✅ Multi Image Input rework: load images by pasting multi-line file paths (quote stripping, EXIF orientation, ComfyUI input-dir relative paths)
 - ✅ Auto re-run on file changes (IS_CHANGED)
 

@@ -328,9 +328,9 @@ class ReplicateDynamicNode:
                 }),
                 
                 # === Sora/Veo 參數 / Sora/Veo Parameters ===
-                "aspect_ratio": (["portrait", "landscape", "square", "match_input_image", "1:1", "16:9", "9:16", "4:3", "3:4", "2:3", "3:2", "4:5", "5:4", "21:9", "9:21"], {
+                "aspect_ratio": (["portrait", "landscape", "square", "auto", "match_input_image", "1:1", "16:9", "9:16", "4:3", "3:4", "2:3", "3:2", "4:5", "5:4", "21:9", "9:21"], {
                     "default": "landscape",
-                    "tooltip": "長寬比 / Aspect Ratio - Sora, FLUX, Nano Banana 使用 / Used for Sora, FLUX, Nano Banana"
+                    "tooltip": "長寬比 / Aspect Ratio - Sora, FLUX, Nano Banana, Grok 使用 / Used for Sora, FLUX, Nano Banana, Grok"
                 }),
                 "resolution": (["480p", "720p", "1080p", "1K", "2K", "4K"], {
                     "default": "720p",
@@ -1281,12 +1281,14 @@ class ReplicateVideoNode:
                     "tooltip": "起始圖片 / Start Image (Kling)"}),
                 "reference_images": ("IMAGE", {
                     "tooltip": "參考圖片 (可多張，使用 batch) / Reference Images batch (Seedance 2.0)"}),
-                "aspect_ratio": (["portrait", "landscape", "square", "1:1", "16:9", "9:16", "4:3", "3:4", "21:9", "9:21"], {
+                "video": ("VIDEO", {
+                    "tooltip": "輸入影片 / Input Video - 影片編輯模式 (Grok, 最長 8.7 秒) / Video editing mode (Grok, max 8.7s)"}),
+                "aspect_ratio": (["portrait", "landscape", "square", "auto", "1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "21:9", "9:21"], {
                     "default": "landscape",
-                    "tooltip": "長寬比 / Aspect Ratio (Sora, Seedance)"}),
+                    "tooltip": "長寬比 / Aspect Ratio (Sora, Seedance, Grok - auto 跟隨輸入圖)"}),
                 "resolution": (["480p", "720p", "1080p"], {
                     "default": "720p",
-                    "tooltip": "解析度 / Resolution (Veo)"}),
+                    "tooltip": "解析度 / Resolution (Veo, Grok)"}),
                 "quality": (["480p", "720p", "1080p"], {
                     "default": "1080p",
                     "tooltip": "品質 / Quality (PixVerse)"}),

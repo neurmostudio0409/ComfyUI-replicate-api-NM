@@ -179,6 +179,29 @@ def test_run_nano_banana_pro_basic(nodes, fake_api):
     }
 
 
+def test_run_grok_imagine_video(nodes, fake_api):
+    nodes._run_replicate_model(
+        "grok-imagine-video", prompt="a penguin walks away",
+        image=torch.zeros((1, 16, 16, 3)),
+        duration=5, resolution="720p", aspect_ratio="16:9",
+    )
+    assert fake_api.captured["model"] == "grok-imagine-video"
+    sent = fake_api.captured["inputs"]
+    assert sent["prompt"] == "a penguin walks away"
+    assert sent["image"].startswith("https://")
+    assert sent["duration"] == 5
+    assert sent["resolution"] == "720p"
+    assert sent["aspect_ratio"] == "16:9"
+
+
+def test_run_grok_aspect_fallback(nodes, fake_api):
+    # 節點預設 landscape 不被 grok 支援，應 fallback 到 auto
+    nodes._run_replicate_model(
+        "grok-imagine-video", prompt="x", aspect_ratio="landscape",
+    )
+    assert fake_api.captured["inputs"]["aspect_ratio"] == "auto"
+
+
 def test_run_unknown_model_returns_error(nodes, fake_api):
     result = nodes._run_replicate_model("not-a-real-model", prompt="x")
     assert result[0] == []  # 無影片

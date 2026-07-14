@@ -300,6 +300,23 @@ REPLICATE_MODELS = {
         "return_type": "VIDEO",
     },
 
+    "grok-imagine-video": {
+        "name": "xai/grok-imagine-video",
+        "display_name": "xAI Grok Imagine Video",
+        "category": "video/generation",
+        "description": "Grok Imagine Video - 文字/圖片轉影片與影片編輯 / Text/Image-to-video generation and video editing",
+        "inputs": {
+            "prompt": {"type": "STRING", "required": True, "multiline": True},
+            "image": {"type": "IMAGE", "required": False},
+            "video": {"type": "VIDEO", "required": False},
+            "duration": {"type": "INT", "default": 5, "min": 1, "max": 15, "step": 1},
+            "resolution": {"type": "COMBO", "options": ["720p", "480p"], "default": "720p"},
+            "aspect_ratio": {"type": "COMBO", "options": ["auto", "16:9", "4:3", "1:1", "9:16", "3:4", "3:2", "2:3"], "default": "auto"},
+        },
+        "outputs": ["video"],
+        "return_type": "VIDEO",
+    },
+
     "p-video": {
         "name": "prunaai/p-video",
         "display_name": "PrunaAI P-Video",
