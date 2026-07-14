@@ -5,10 +5,11 @@ ComfyUI Replicate API 整合模組
 
 import os
 
-try:
+# 以頂層模組方式匯入時（例如 pytest 收集）改用絕對匯入
+# 用 __package__ 判斷而非 try/except，避免掩蓋真正的相依套件缺失錯誤
+if __package__:
     from .replicate_nodes import NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS
-except ImportError:
-    # 以頂層模組方式匯入時（例如 pytest 收集）改用絕對匯入
+else:
     from replicate_nodes import NODE_CLASS_MAPPINGS, NODE_DISPLAY_NAME_MAPPINGS
 
 # 載入 API token

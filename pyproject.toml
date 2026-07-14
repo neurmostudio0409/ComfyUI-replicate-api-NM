@@ -1,0 +1,23 @@
+[project]
+name = "comfyui-replicate-api-nm"
+description = "Universal Replicate API integration for ComfyUI - video (Sora 2, Veo 3.1, Seedance, Kling), image (Nano Banana Pro/2, FLUX), lipsync, audio and 3D models with multi-image reference input. 通用 Replicate API 整合，支援影片/圖片/音訊/3D 生成與唇語同步。"
+version = "2.2.0"
+license = { file = "LICENSE" }
+dependencies = [
+    "replicate>=0.25.0",
+    "requests>=2.25.0",
+    "python-dotenv>=1.0.0",
+    "numpy>=1.19.0",
+    "opencv-python>=4.5.0",
+    "soundfile>=0.10.0",
+    "scipy>=1.7.0",
+]
+
+[project.urls]
+Repository = "https://github.com/neurmostudio0409/ComfyUI-replicate-api-NM"
+BugTracker = "https://github.com/neurmostudio0409/ComfyUI-replicate-api-NM/issues"
+
+[tool.comfy]
+# ⚠️ PublisherId 必須與你在 https://registry.comfy.org 建立的 Publisher ID 一致
+PublisherId = "neurmostudio"
+DisplayName = "Replicate API NM"

@@ -11,11 +11,11 @@ import tempfile
 from dotenv import load_dotenv
 
 # 嘗試載入 model_configs
+# 以頂層模組方式匯入時（例如 pytest 收集）改用絕對匯入
 try:
-    try:
+    if __package__:
         from .model_configs import REPLICATE_MODELS, get_model_config
-    except ImportError:
-        # 以頂層模組方式匯入時（例如 pytest 收集）改用絕對匯入
+    else:
         from model_configs import REPLICATE_MODELS, get_model_config
     HAS_MODEL_CONFIGS = True
 except ImportError:

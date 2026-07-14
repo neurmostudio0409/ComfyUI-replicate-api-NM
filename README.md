@@ -11,18 +11,25 @@
 ### 特色功能
 
 ✨ **動態參數** - 根據選擇的模型自動顯示/隱藏相關參數  
-🎬 **影片生成** - Sora 2, Veo 3.1, MiniMax, Wan, SVD  
+🎬 **影片生成** - Sora 2, Veo 3.1, MiniMax, Wan, SVD, Seedance, Kling, LTX  
 🎭 **唇語同步** - Sync Lipsync 2 Pro  
-🎨 **圖片生成** - FLUX Schnell, FLUX Dev, Luma Photon  
+🎨 **圖片生成** - Nano Banana Pro/2 (含透明去背), FLUX Schnell, FLUX Dev, Luma Photon  
+🖼️ **多圖輸入** - 多張參考圖片一次餵給模型（尺寸可不同，最多 14 張）  
 🔊 **音訊支援** - 獨立音訊輸出與合併功能  
 
 ### 快速開始
 
 ### 1. 安裝
 
+**方式一：ComfyUI Manager（推薦）**
+
+在 ComfyUI Manager 的 Custom Nodes 搜尋 `Replicate API NM` 並安裝。
+
+**方式二：手動安裝**
+
 ```bash
 cd ComfyUI/custom_nodes
-git clone https://github.com/YOUR_REPO/ComfyUI-replicate-api-NM
+git clone https://github.com/neurmostudio0409/ComfyUI-replicate-api-NM
 cd ComfyUI-replicate-api-NM
 pip install -r requirements.txt
 ```
@@ -48,6 +55,7 @@ python main.py
 ### 主要節點
 
 - **🎬 Replicate (動態)** - 通用節點，支援所有模型，動態參數顯示
+- **🖼️ 多圖輸入** - 合併多張圖片為圖片清單（各圖尺寸可不同，可串接載入更多）
 - **📹 Replicate 影片輸出** - 將影片路徑轉換為 VIDEO 格式
 - **🎵 Replicate 音訊輸出** - 輸出音訊檔案
 - **🔄 合併影片與音訊** - 使用 FFmpeg 合併
@@ -77,11 +85,28 @@ python main.py
 - **Video Retalking** - 影片唇語同步
 
 ### 圖片生成
+- **Nano Banana Pro** (google/nano-banana-pro) - Google 最先進圖片生成/編輯，1K/2K/4K，支援最多 14 張參考圖
+- **Nano Banana 2** (google/nano-banana-2) - 快速圖片生成、多圖融合、Google 搜尋 grounding
+- **Nano Banana 2 Transparent** (jide/nano-banana-2-transparent) - RGBA 透明去背
 - **FLUX Schnell** - 快速圖片生成
 - **FLUX Dev** - 高品質圖片生成
 - **Luma Photon** - AI 圖片生成
 
 ## 使用範例
+
+### Nano Banana 多圖參考生成
+
+1. 新增「🖼️ 多圖輸入」節點，接上 2~6 張參考圖（要更多張可串接第二個多圖輸入節點）
+2. 新增「🎨 圖片生成」節點，選擇模型：`nano-banana-pro` 或 `nano-banana-2`
+3. 將多圖輸入的 `image_list` 接到圖片生成節點的 `image_input`
+4. 輸入提示詞，選擇解析度（1K/2K/4K）與長寬比（`match_input_image` 可跟隨輸入圖）
+
+### 透明去背（Nano Banana 2 Transparent）
+
+1. 新增「🎨 圖片生成」節點，選擇模型：`nano-banana-2-transparent`
+2. 接上要去背的圖片（`image`）
+3. （可選）prompt 指定要保留的主體，例如 `the car`
+4. 輸出為含 alpha 通道的 RGBA 圖片
 
 ### Sora 2 影片生成
 
@@ -162,6 +187,13 @@ sudo apt-get install ffmpeg
 
 ## 更新日誌
 
+### v2.2 (2026-07)
+- ✅ 新增 Google Nano Banana Pro / Nano Banana 2 圖片生成模型
+- ✅ 新增 Nano Banana 2 Transparent 透明去背模型（RGBA 輸出）
+- ✅ 新增「🖼️ 多圖輸入」節點（image_input，最多 14 張、尺寸可不同）
+- ✅ 單元測試（21 項）與 GitHub Actions CI/CD
+- ✅ 發布至 Comfy Registry
+
 ### v2.1 (2025-01)
 - ✅ 簡化檔案結構，整合 API 和節點
 - ✅ 全面繁體中文化
@@ -199,18 +231,25 @@ Universal Replicate API integration module supporting multiple AI models (Sora 2
 ### Features
 
 ✨ **Dynamic Parameters** - Auto show/hide relevant parameters based on selected model  
-🎬 **Video Generation** - Sora 2, Veo 3.1, MiniMax, Wan, SVD  
+🎬 **Video Generation** - Sora 2, Veo 3.1, MiniMax, Wan, SVD, Seedance, Kling, LTX  
 🎭 **Lipsync** - Sync Lipsync 2 Pro  
-🎨 **Image Generation** - FLUX Schnell, FLUX Dev, Luma Photon  
+🎨 **Image Generation** - Nano Banana Pro/2 (incl. transparent matting), FLUX Schnell, FLUX Dev, Luma Photon  
+🖼️ **Multi Image Input** - Feed up to 14 reference images of different sizes  
 🔊 **Audio Support** - Independent audio output and merge functionality  
 
 ### Quick Start
 
 #### 1. Installation
 
+**Option 1: ComfyUI Manager (recommended)**
+
+Search for `Replicate API NM` in ComfyUI Manager's Custom Nodes and install.
+
+**Option 2: Manual**
+
 ```bash
 cd ComfyUI/custom_nodes
-git clone https://github.com/YOUR_REPO/ComfyUI-replicate-api-NM
+git clone https://github.com/neurmostudio0409/ComfyUI-replicate-api-NM
 cd ComfyUI-replicate-api-NM
 pip install -r requirements.txt
 ```
@@ -265,6 +304,9 @@ python main.py
 - **Video Retalking** - Video lipsync
 
 #### Image Generation
+- **Nano Banana Pro** (google/nano-banana-pro) - Google's state-of-the-art image generation/editing, 1K/2K/4K, up to 14 reference images
+- **Nano Banana 2** (google/nano-banana-2) - Fast image generation, multi-image fusion, Google Search grounding
+- **Nano Banana 2 Transparent** (jide/nano-banana-2-transparent) - RGBA transparent background matting
 - **FLUX Schnell** - Fast image generation
 - **FLUX Dev** - High-quality image generation
 - **Luma Photon** - AI image generation
@@ -349,6 +391,13 @@ sudo apt-get install ffmpeg
 Refer to `model_configs.py` for model configurations and ensure all required parameters are provided.
 
 ### Changelog
+
+#### v2.2 (2026-07)
+- ✅ Added Google Nano Banana Pro / Nano Banana 2 image generation models
+- ✅ Added Nano Banana 2 Transparent matting model (RGBA output)
+- ✅ Added "🖼️ Multi Image Input" node (image_input, up to 14 images of different sizes)
+- ✅ Unit tests (21) and GitHub Actions CI/CD
+- ✅ Published to Comfy Registry
 
 #### v2.1 (2025-01)
 - ✅ Simplified file structure, integrated API and nodes
