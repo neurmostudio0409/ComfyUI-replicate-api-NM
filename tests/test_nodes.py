@@ -206,3 +206,31 @@ def test_run_unknown_model_returns_error(nodes, fake_api):
     result = nodes._run_replicate_model("not-a-real-model", prompt="x")
     assert result[0] == []  # 無影片
     assert "未知模型" in result[3]
+
+
+# ======================
+# 下載目錄（避免與 Save 節點重複存檔）
+# ======================
+
+def test_download_directory_uses_comfyui_temp(api_module, monkeypatch):
+    """結果應下載到 ComfyUI temp 目錄，不是 output 目錄"""
+    class FakeFolderPaths:
+        @staticmethod
+        def get_temp_directory():
+            return "X:/comfy_temp"
+        @staticmethod
+        def get_output_directory():
+            return "X:/comfy_output"
+    monkeypatch.setattr(api_module, "folder_paths", FakeFolderPaths)
+    assert api_module.get_download_directory() == "X:/comfy_temp"
+
+
+def test_download_directory_fallback_without_comfyui(api_module, monkeypatch):
+    class NoTempFolderPaths:
+        @staticmethod
+        def get_output_directory():
+            return "X:/comfy_output"
+    monkeypatch.setattr(api_module, "folder_paths", NoTempFolderPaths)
+    path = api_module.get_download_directory()
+    assert "comfyui_replicate" in path
+    assert "comfy_output" not in path

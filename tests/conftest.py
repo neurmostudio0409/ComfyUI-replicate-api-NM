@@ -52,6 +52,11 @@ def nodes():
     return importlib.import_module(f"{PKG_NAME}.replicate_nodes")
 
 
+@pytest.fixture(scope="session")
+def api_module():
+    return importlib.import_module(f"{PKG_NAME}.replicate_api")
+
+
 class FakeReplicateAPI:
     """攔截 run_model / upload_file 的假 API，記錄實際送出的參數"""
 

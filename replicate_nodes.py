@@ -11,10 +11,10 @@ import cv2
 # 以頂層模組方式匯入時（例如 pytest 收集）改用絕對匯入
 # 用 __package__ 判斷而非 try/except，避免掩蓋真正的相依套件缺失錯誤
 if __package__:
-    from .replicate_api import SyncAPI, ReplicateAPI
+    from .replicate_api import SyncAPI, ReplicateAPI, get_download_directory
     from .replicate_utils import VideoUtils, AudioUtils, ImageUtils, cleanup_temp_file
 else:
-    from replicate_api import SyncAPI, ReplicateAPI
+    from replicate_api import SyncAPI, ReplicateAPI, get_download_directory
     from replicate_utils import VideoUtils, AudioUtils, ImageUtils, cleanup_temp_file
 
 # 嘗試載入 model_configs
@@ -605,10 +605,11 @@ class ReplicateVideoAudioMerge:
         
         try:
             import subprocess
-            
-            output_dir = folder_paths.get_output_directory()
+
+            # 合併結果放暫存目錄，由 Save Video 節點負責實際保存（避免重複存檔）
+            output_dir = get_download_directory()
             os.makedirs(output_dir, exist_ok=True)
-            
+
             import time
             timestamp = int(time.time())
             output_path = os.path.join(output_dir, f"{output_filename}_{timestamp}.mp4")

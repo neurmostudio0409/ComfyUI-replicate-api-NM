@@ -40,7 +40,19 @@ except ImportError:
         @staticmethod
         def get_output_directory():
             return os.path.join(os.getcwd(), "output")
+        @staticmethod
+        def get_temp_directory():
+            return os.path.join(os.getcwd(), "temp")
     folder_paths = FolderPaths()
+
+
+def get_download_directory():
+    """下載結果的暫存目錄。
+    結果一律下載到 ComfyUI temp 目錄（重啟自動清除），
+    由下游 Save Image / Save Video 等節點負責實際保存，避免重複存檔。"""
+    if hasattr(folder_paths, "get_temp_directory"):
+        return folder_paths.get_temp_directory()
+    return os.path.join(tempfile.gettempdir(), "comfyui_replicate")
 
 
 class ReplicateAPI:
@@ -248,11 +260,11 @@ class ReplicateAPI:
         """
         try:
             print(f"⬇️ 下載中: {url}")
-            
-            # Get output directory
-            output_dir = folder_paths.get_output_directory()
+
+            # 下載到暫存目錄，由 Save 節點負責實際保存（避免重複存檔）
+            output_dir = get_download_directory()
             os.makedirs(output_dir, exist_ok=True)
-            
+
             # Create output path with timestamp
             timestamp = int(time.time())
             output_path = os.path.join(output_dir, f"{filename}_{timestamp}{extension}")
@@ -289,10 +301,11 @@ class ReplicateAPI:
         """
         try:
             import subprocess
-            
-            output_dir = folder_paths.get_output_directory()
+
+            # 提取的音訊放暫存目錄，由 Save Audio 節點負責實際保存
+            output_dir = get_download_directory()
             os.makedirs(output_dir, exist_ok=True)
-            
+
             timestamp = int(time.time())
             audio_path = os.path.join(output_dir, f"{output_filename}_{timestamp}.wav")
             
