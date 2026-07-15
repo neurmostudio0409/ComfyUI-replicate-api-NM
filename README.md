@@ -225,7 +225,7 @@ sudo apt-get install ffmpeg
 
 ## 授權
 
-MIT License
+GPL-3.0 License - 詳見 [LICENSE](LICENSE)
 
 ## 貢獻
 
@@ -437,7 +437,7 @@ Refer to `model_configs.py` for model configurations and ensure all required par
 
 ### License
 
-MIT License
+GPL-3.0 License - see [LICENSE](LICENSE)
 
 ### Contributing
 
