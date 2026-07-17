@@ -209,6 +209,52 @@ def test_run_unknown_model_returns_error(nodes, fake_api):
 
 
 # ======================
+# 圖片輸入誤接補救 / Image input fallback
+# ======================
+
+def test_image_wired_to_wrong_slot_falls_back_to_image_input(nodes, fake_api):
+    """使用者把圖接到 image 而非 image_input 時，Nano Banana 仍應吃到圖"""
+    nodes._run_replicate_model(
+        "nano-banana-pro", prompt="a person in a tree",
+        image=torch.zeros((1, 16, 16, 3)),  # 誤接到 image
+    )
+    sent = fake_api.captured["inputs"]
+    assert "image_input" in sent, "接錯孔的圖片應自動轉為 image_input"
+    assert len(sent["image_input"]) == 1
+
+
+def test_empty_image_list_falls_back_to_wired_image(nodes, fake_api):
+    """image_input 接了空清單時，改用 image 輸入的圖"""
+    nodes._run_replicate_model(
+        "nano-banana-2", prompt="x",
+        image_input=[], image=torch.zeros((2, 8, 8, 3)),
+    )
+    sent = fake_api.captured["inputs"]
+    assert len(sent["image_input"]) == 2  # batch 2 張
+
+
+def test_image_list_falls_back_to_single_image_input(nodes, fake_api):
+    """只吃單張 image 的模型（透明去背）接到多圖清單時，用第一張"""
+    nodes._run_replicate_model(
+        "nano-banana-2-transparent", prompt="",
+        image_input=[torch.zeros((1, 8, 8, 3)), torch.zeros((1, 4, 4, 3))],
+    )
+    sent = fake_api.captured["inputs"]
+    assert "image" in sent
+
+
+def test_unsupported_image_input_is_ignored(nodes, fake_api):
+    """模型不吃圖時，接了圖也不會誤送參數"""
+    nodes._run_replicate_model(
+        "flux-schnell", prompt="x",
+        image=torch.zeros((1, 8, 8, 3)),
+    )
+    sent = fake_api.captured["inputs"]
+    assert "image" not in sent
+    assert "image_input" not in sent
+
+
+# ======================
 # 下載目錄（避免與 Save 節點重複存檔）
 # ======================
 

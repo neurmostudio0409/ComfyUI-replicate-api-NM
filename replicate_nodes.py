@@ -957,6 +957,8 @@ def _run_replicate_model(model_id, prompt="", image=None, input_reference=None,
             'last_frame': last_frame,
             'start_image': start_image,
         }
+        # 記錄被自動轉接的輸入（誤接補救），避免重複警告
+        fallback_used = set()
 
         def _upload_image_batch(tensor):
             """將批次圖片張量逐張存檔上傳，回傳 URL 清單
@@ -998,6 +1000,14 @@ def _run_replicate_model(model_id, prompt="", image=None, input_reference=None,
                 elif input_name in kwargs:
                     image_param = kwargs[input_name]
 
+                if image_param is None:
+                    # 誤接補救：圖接在多圖輸入 (image_input) 但模型只吃單張 → 用第一張
+                    list_param = kwargs.get('image_input')
+                    if 'image_input' not in model_inputs and isinstance(list_param, (list, tuple)) and len(list_param) > 0:
+                        image_param = list_param[0]
+                        fallback_used.add('image_input')
+                        print(f"ℹ️ '{input_name}' 未連接，改用多圖輸入 (image_input) 的第一張圖片")
+
                 if image_param is not None:
                     image_path = ImageUtils.save_image_tensor(image_param)
                     if image_path:
@@ -1015,10 +1025,26 @@ def _run_replicate_model(model_id, prompt="", image=None, input_reference=None,
                 elif input_name in kwargs:
                     image_param = kwargs[input_name]
 
-                if image_param is not None:
+                if image_param is None or (isinstance(image_param, (list, tuple)) and len(image_param) == 0):
+                    # 誤接補救：使用者常把參考圖接到 image / input_reference 等單張輸入，
+                    # 但此模型（如 Nano Banana）只吃 image_input 清單 → 自動改用接到的圖
+                    alt_sources = dict(image_map)
+                    alt_sources['reference_images'] = kwargs.get('reference_images')
+                    for alt_name, alt_value in alt_sources.items():
+                        if alt_value is None or alt_name in model_inputs:
+                            continue
+                        image_param = alt_value
+                        fallback_used.add(alt_name)
+                        print(f"ℹ️ '{input_name}' 未連接，自動改用 '{alt_name}' 輸入的圖片 / using images wired to '{alt_name}'")
+                        break
+
+                if image_param is not None and not (isinstance(image_param, (list, tuple)) and len(image_param) == 0):
                     urls = _upload_image_batch(image_param)
                     if urls:
                         inputs[input_name] = urls
+                        print(f"🖼️ '{input_name}': 已上傳 {len(urls)} 張參考圖片 / uploaded {len(urls)} reference image(s)")
+                    else:
+                        print(f"⚠️ '{input_name}' 沒有成功上傳任何圖片 / no image uploaded successfully")
                 elif is_required:
                     print(f"⚠️ 必要圖片清單 '{input_name}' 未提供")
 
@@ -1056,6 +1082,17 @@ def _run_replicate_model(model_id, prompt="", image=None, input_reference=None,
                 elif is_required and "default" in input_config:
                     inputs[input_name] = input_config["default"]
         
+        # 提醒被忽略的圖片輸入（有接線但該模型不使用，也沒被自動轉接）
+        provided_images = dict(image_map)
+        provided_images['image_input'] = kwargs.get('image_input')
+        provided_images['reference_images'] = kwargs.get('reference_images')
+        for name, value in provided_images.items():
+            if value is None or (isinstance(value, (list, tuple)) and len(value) == 0):
+                continue
+            if name in model_inputs or name in fallback_used:
+                continue
+            print(f"⚠️ 輸入 '{name}' 已連接，但 {model_id} 不使用此參數，已忽略 / '{name}' is connected but not used by this model, ignored")
+
         print(f"📤 執行模型...")
         print(f"📝 參數: {list(inputs.keys())}")
         

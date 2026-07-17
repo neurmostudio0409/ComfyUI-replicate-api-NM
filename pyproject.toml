@@ -1,7 +1,7 @@
 [project]
 name = "comfyui-replicate-api-nm"
 description = "Universal Replicate API integration for ComfyUI - video (Sora 2, Veo 3.1, Seedance, Kling), image (Nano Banana Pro/2, FLUX), lipsync, audio and 3D models with multi-image reference input. 通用 Replicate API 整合，支援影片/圖片/音訊/3D 生成與唇語同步。"
-version = "2.3.1"
+version = "2.3.2"
 license = { file = "LICENSE" }  # GPL-3.0
 dependencies = [
     "replicate>=0.25.0",

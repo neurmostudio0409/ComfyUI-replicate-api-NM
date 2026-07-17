@@ -195,6 +195,10 @@ sudo apt-get install ffmpeg
 
 ## 更新日誌
 
+### v2.3.2 (2026-07)
+- ✅ 圖片輸入誤接補救：圖接到 `image` 等單張輸入但模型只吃 `image_input`（Nano Banana）時自動轉接，反之亦然
+- ✅ 接了但模型不使用的圖片輸入，現在會印出明確警告（不再靜默忽略）
+
 ### v2.3 (2026-07)
 - ✅ 生成結果（影片/圖片/音訊/3D）改下載到 ComfyUI temp 目錄，由 Save Image / Save Video 等節點負責保存，避免 output 目錄出現重複檔案
 - ✅ 新增 xAI Grok Imagine Video 模型（文字/圖片轉影片、影片編輯模式）
@@ -406,6 +410,10 @@ sudo apt-get install ffmpeg
 Refer to `model_configs.py` for model configurations and ensure all required parameters are provided.
 
 ### Changelog
+
+#### v2.3.2 (2026-07)
+- ✅ Image input auto-fallback: images wired to `image` are auto-routed to `image_input` for models that only accept lists (Nano Banana), and vice versa
+- ✅ Connected-but-unused image inputs now print an explicit warning instead of being silently dropped
 
 #### v2.3 (2026-07)
 - ✅ Results (video/image/audio/3D) now download to ComfyUI temp directory; saving is left to Save Image / Save Video nodes to avoid duplicate files in output
