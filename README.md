@@ -99,7 +99,7 @@ python main.py
 
 1. 新增「🖼️ 多圖輸入」節點，在 `image_paths` 貼上圖片路徑（每行一個，可直接用檔案總管「複製路徑」貼上，引號會自動去除）；也可用 image_1~6 接線輸入
 2. 新增「🎨 圖片生成」節點，選擇模型：`nano-banana-pro` 或 `nano-banana-2`
-3. 將多圖輸入的 `image_list` 接到圖片生成節點的 `image_input`
+3. 將多圖輸入的 `image_list` 接到圖片生成節點的 **`images`**（統一圖片接口，單張圖或 batch 也接這裡）
 4. 輸入提示詞，選擇解析度（1K/2K/4K）與長寬比（`match_input_image` 可跟隨輸入圖）
 
 ```
@@ -112,7 +112,7 @@ my_input_image.png        ← ComfyUI input 目錄內的檔案
 ### 透明去背（Nano Banana 2 Transparent）
 
 1. 新增「🎨 圖片生成」節點，選擇模型：`nano-banana-2-transparent`
-2. 接上要去背的圖片（`image`）
+2. 把要去背的圖片接到 `images`（後端自動送到模型的 image 端點）
 3. （可選）prompt 指定要保留的主體，例如 `the car`
 4. 輸出為含 alpha 通道的 RGBA 圖片
 
@@ -194,6 +194,12 @@ sudo apt-get install ffmpeg
 請參考 `model_configs.py` 中的模型配置，確保提供所有必要參數。
 
 ## 更新日誌
+
+### v2.4.0 (2026-07)
+- ✅ **統一圖片接口**：所有圖片輸入收斂為單一 `images` 孔（接單張、batch 或多圖輸入節點皆可）
+- ✅ 分配邏輯藏在後端：依模型設定自動路由到對應端點（Nano Banana→image_input、Seedance→reference_images、Veo/Wan→image、Sora→input_reference、MiniMax→首幀、Kling→起始圖）
+- ✅ `last_frame`（末幀）保留獨立輸入，不參與自動分配
+- ⚠️ 舊的 image / input_reference / first_frame_image / start_image / reference_images / image_input 輸入孔已移除，舊 workflow 需改接 `images`
 
 ### v2.3.2 (2026-07)
 - ✅ 圖片輸入誤接補救：圖接到 `image` 等單張輸入但模型只吃 `image_input`（Nano Banana）時自動轉接，反之亦然
@@ -410,6 +416,12 @@ sudo apt-get install ffmpeg
 Refer to `model_configs.py` for model configurations and ensure all required parameters are provided.
 
 ### Changelog
+
+#### v2.4.0 (2026-07)
+- ✅ **Unified image input**: all image inputs consolidated into a single `images` socket (single image, batch, or Multi Image Input node)
+- ✅ Routing hidden in backend: automatically mapped to each model's endpoint (Nano Banana→image_input, Seedance→reference_images, Veo/Wan→image, Sora→input_reference, MiniMax→first frame, Kling→start image)
+- ✅ `last_frame` kept as a dedicated input, excluded from auto-routing
+- ⚠️ Legacy image sockets removed; reconnect old workflows to `images`
 
 #### v2.3.2 (2026-07)
 - ✅ Image input auto-fallback: images wired to `image` are auto-routed to `image_input` for models that only accept lists (Nano Banana), and vice versa

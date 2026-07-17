@@ -296,27 +296,12 @@ class ReplicateDynamicNode:
                     "tooltip": "提示詞 / Prompt - 用於 Sora, Veo, MiniMax 等 / Used for Sora, Veo, MiniMax, etc."
                 }),
                 
-                # === 圖片輸入 / Image Inputs ===
-                "image": ("IMAGE", {
-                    "tooltip": "輸入圖片 / Input Image - Veo, Wan, SVD 需要 / Required for Veo, Wan, SVD"
-                }),
-                "input_reference": ("IMAGE", {
-                    "tooltip": "參考圖片 / Reference Image - Sora 2 使用 / Used for Sora 2"
-                }),
-                "first_frame_image": ("IMAGE", {
-                    "tooltip": "首幀圖片 / First Frame - MiniMax 使用 / Used for MiniMax"
+                # === 圖片輸入（統一接口）/ Unified Image Input ===
+                "images": ("IMAGE,REPLICATE_IMAGE_LIST", {
+                    "tooltip": "圖片輸入（統一）/ Images (unified) - 接單張圖、batch 或多圖輸入節點；後端自動分配到模型對應參數（Veo/Wan=輸入圖、Sora=參考圖、MiniMax=首幀、Kling=起始圖、Nano Banana/Seedance=多張參考圖）/ Automatically routed to the model's image parameter(s)."
                 }),
                 "last_frame": ("IMAGE", {
-                    "tooltip": "末幀圖片 / Last Frame - Veo 使用 / Used for Veo"
-                }),
-                "start_image": ("IMAGE", {
-                    "tooltip": "起始幀圖片 / Start Image - Kling 使用 / Used for Kling"
-                }),
-                "reference_images": ("IMAGE", {
-                    "tooltip": "參考圖片 batch / Reference Images batch - Seedance 2.0 使用 / Used for Seedance 2.0"
-                }),
-                "image_input": ("REPLICATE_IMAGE_LIST", {
-                    "tooltip": "多張參考圖片 / Multi reference images - Nano Banana 使用，接多圖輸入節點 / Used for Nano Banana, connect Multi Image Input node"
+                    "tooltip": "末幀圖片 / Last Frame - Veo 使用，獨立輸入 / Used for Veo, dedicated input"
                 }),
 
                 # === 影片/音訊輸入 / Video/Audio Inputs ===
@@ -910,6 +895,25 @@ class ReplicateModelInfo:
 # 共用執行邏輯 / Shared Execution Logic
 # ======================
 
+def _flatten_image_items(value):
+    """把統一圖片輸入攤平成單張張量清單（每項 [1,H,W,C]）
+    支援：單張/批次 IMAGE 張量、REPLICATE_IMAGE_LIST（含巢狀清單）"""
+    items = []
+    if value is None:
+        return items
+    if isinstance(value, (list, tuple)):
+        for v in value:
+            items.extend(_flatten_image_items(v))
+        return items
+    if isinstance(value, torch.Tensor):
+        tensor = value
+        if tensor.dim() == 3:
+            tensor = tensor.unsqueeze(0)
+        for i in range(tensor.shape[0]):
+            items.append(tensor[i:i+1])
+    return items
+
+
 def _extract_video_path(video_input):
     """從影片輸入提取檔案路徑"""
     if isinstance(video_input, str):
@@ -959,6 +963,40 @@ def _run_replicate_model(model_id, prompt="", image=None, input_reference=None,
         }
         # 記錄被自動轉接的輸入（誤接補救），避免重複警告
         fallback_used = set()
+
+        # === 統一圖片接口路由 / Unified image input routing ===
+        # 節點只提供一個 images 輸入；各模型吃的圖片端點名稱不同
+        # (image / input_reference / first_frame_image / start_image /
+        #  reference_images / image_input / face ...)，在此依模型設定自動分配。
+        # last_frame 為獨立輸入，不參與自動分配。
+        unified_images = _flatten_image_items(kwargs.get('images'))
+        if unified_images:
+            list_targets = [n for n, c in model_inputs.items() if c.get("type") == "IMAGE_LIST"]
+            single_targets = [n for n, c in model_inputs.items()
+                              if c.get("type") == "IMAGE" and n != "last_frame"]
+            if list_targets:
+                # 吃清單的模型（Nano Banana image_input、Seedance reference_images）→ 全部分配
+                target = list_targets[0]
+                existing = image_map.get(target) if target in image_map else kwargs.get(target)
+                if existing is None or (isinstance(existing, (list, tuple)) and len(existing) == 0):
+                    image_map[target] = unified_images
+                    print(f"🖼️ 統一圖片輸入 → '{target}' ({len(unified_images)} 張 / images)")
+            elif single_targets:
+                # 吃單張的模型 → 依模型參數宣告順序逐張分配
+                assigned = 0
+                for name in single_targets:
+                    existing = image_map.get(name) if name in image_map else kwargs.get(name)
+                    if existing is not None:
+                        continue
+                    if assigned >= len(unified_images):
+                        break
+                    image_map[name] = unified_images[assigned]
+                    assigned += 1
+                    print(f"🖼️ 統一圖片輸入: 第 {assigned} 張 → '{name}'")
+                if assigned < len(unified_images):
+                    print(f"⚠️ 有 {len(unified_images) - assigned} 張圖片未被使用（{model_id} 的圖片端點已滿）")
+            else:
+                print(f"⚠️ {model_id} 不接受圖片輸入，已忽略 {len(unified_images)} 張圖片 / model accepts no image input")
 
         def _upload_image_batch(tensor):
             """將批次圖片張量逐張存檔上傳，回傳 URL 清單
@@ -1307,18 +1345,10 @@ class ReplicateVideoNode:
             "optional": {
                 "prompt": ("STRING", {"default": "", "multiline": True,
                     "tooltip": "提示詞 / Prompt"}),
-                "image": ("IMAGE", {
-                    "tooltip": "輸入圖片 / Input Image (Veo, Wan, LTX, P-Video)"}),
-                "input_reference": ("IMAGE", {
-                    "tooltip": "參考圖片 / Reference Image (Sora 2)"}),
-                "first_frame_image": ("IMAGE", {
-                    "tooltip": "首幀圖片 / First Frame (MiniMax, Hailuo)"}),
+                "images": ("IMAGE,REPLICATE_IMAGE_LIST", {
+                    "tooltip": "圖片輸入（統一）/ Images (unified) - 接單張圖、batch 或多圖輸入節點；後端自動分配（Veo/Wan/LTX=輸入圖、Sora=參考圖、MiniMax=首幀、Kling=起始圖、Seedance=多張參考圖）"}),
                 "last_frame": ("IMAGE", {
-                    "tooltip": "末幀圖片 / Last Frame (Veo)"}),
-                "start_image": ("IMAGE", {
-                    "tooltip": "起始圖片 / Start Image (Kling)"}),
-                "reference_images": ("IMAGE", {
-                    "tooltip": "參考圖片 (可多張，使用 batch) / Reference Images batch (Seedance 2.0)"}),
+                    "tooltip": "末幀圖片 / Last Frame (Veo) - 獨立輸入 / dedicated input"}),
                 "video": ("VIDEO", {
                     "tooltip": "輸入影片 / Input Video - 影片編輯模式 (Grok, 最長 8.7 秒) / Video editing mode (Grok, max 8.7s)"}),
                 "aspect_ratio": (["portrait", "landscape", "square", "auto", "1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "21:9", "9:21"], {
@@ -1394,8 +1424,8 @@ class ReplicateEnhanceNode:
                     "tooltip": "輸入影片 / Input Video"}),
                 "audio": ("AUDIO", {
                     "tooltip": "輸入音訊 / Input Audio (Lipsync, Retalking)"}),
-                "face": ("IMAGE", {
-                    "tooltip": "人臉圖片 / Face Image (Retalking)"}),
+                "images": ("IMAGE,REPLICATE_IMAGE_LIST", {
+                    "tooltip": "圖片輸入（統一）/ Images (unified) - 人臉圖片等 (Retalking face)"}),
                 "sync_mode": (["loop", "bounce", "cut_off", "silence", "remap"], {
                     "default": "loop",
                     "tooltip": "同步模式 / Sync Mode (Lipsync)"}),
@@ -1485,10 +1515,8 @@ class ReplicateImageNode:
             "optional": {
                 "prompt": ("STRING", {"default": "", "multiline": True,
                     "tooltip": "提示詞 / Prompt"}),
-                "image": ("IMAGE", {
-                    "tooltip": "輸入圖片 / Input Image (Nano Banana Transparent 去背)"}),
-                "image_input": ("REPLICATE_IMAGE_LIST", {
-                    "tooltip": "多張參考圖片 / Multi reference images (Nano Banana - 使用多圖輸入節點 / use Multi Image Input node)"}),
+                "images": ("IMAGE,REPLICATE_IMAGE_LIST", {
+                    "tooltip": "圖片輸入（統一）/ Images (unified) - 接單張圖、batch 或多圖輸入節點；後端自動分配（Nano Banana=多張參考圖、Transparent=去背輸入圖）"}),
                 "aspect_ratio": (["match_input_image", "1:1", "16:9", "9:16", "4:3", "3:4", "2:3", "3:2", "4:5", "5:4", "21:9", "9:21"], {
                     "default": "1:1",
                     "tooltip": "長寬比 / Aspect Ratio (match_input_image: Nano Banana)"}),

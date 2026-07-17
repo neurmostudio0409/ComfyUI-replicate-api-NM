@@ -102,19 +102,32 @@ def test_multi_image_is_changed_tracks_mtime(nodes, tmp_path):
 # 節點輸入定義
 # ======================
 
-def test_image_node_has_nano_banana_inputs(nodes):
+def test_image_node_has_unified_images_input(nodes):
     optional = nodes.ReplicateImageNode.INPUT_TYPES()["optional"]
-    for key in ("image", "image_input", "resolution", "alpha_ceil", "alpha_floor",
+    for key in ("images", "resolution", "alpha_ceil", "alpha_floor",
                 "image_search", "google_search"):
         assert key in optional, f"ReplicateImageNode 缺少 '{key}'"
-    assert optional["image_input"][0] == "REPLICATE_IMAGE_LIST"
+    assert optional["images"][0] == "IMAGE,REPLICATE_IMAGE_LIST"
     assert "match_input_image" in optional["aspect_ratio"][0]
+    # 舊圖片輸入已收斂成統一接口
+    assert "image" not in optional
+    assert "image_input" not in optional
 
 
-def test_dynamic_node_has_image_input(nodes):
+def test_dynamic_node_has_unified_images_and_last_frame(nodes):
     optional = nodes.ReplicateDynamicNode.INPUT_TYPES()["optional"]
-    assert "image_input" in optional
-    assert optional["image_input"][0] == "REPLICATE_IMAGE_LIST"
+    assert optional["images"][0] == "IMAGE,REPLICATE_IMAGE_LIST"
+    assert "last_frame" in optional  # 末幀保留獨立輸入
+    for legacy in ("image", "input_reference", "first_frame_image", "start_image",
+                   "reference_images", "image_input"):
+        assert legacy not in optional, f"'{legacy}' 應收斂到統一 images 接口"
+
+
+def test_video_node_has_unified_images_and_last_frame(nodes):
+    optional = nodes.ReplicateVideoNode.INPUT_TYPES()["optional"]
+    assert optional["images"][0] == "IMAGE,REPLICATE_IMAGE_LIST"
+    assert "last_frame" in optional
+    assert "image" not in optional
 
 
 # ======================
@@ -206,6 +219,65 @@ def test_run_unknown_model_returns_error(nodes, fake_api):
     result = nodes._run_replicate_model("not-a-real-model", prompt="x")
     assert result[0] == []  # 無影片
     assert "未知模型" in result[3]
+
+
+# ======================
+# 統一圖片接口路由 / Unified images routing
+# ======================
+
+def test_unified_images_routes_to_image_list(nodes, fake_api):
+    """Nano Banana（吃 image_input 清單）：所有圖片都送進 image_input"""
+    imgs = [torch.zeros((1, 16, 16, 3)), torch.zeros((2, 8, 8, 3))]  # 1 + batch 2
+    nodes._run_replicate_model("nano-banana-pro", prompt="x", images=imgs)
+    sent = fake_api.captured["inputs"]
+    assert len(sent["image_input"]) == 3
+
+
+def test_unified_images_single_tensor(nodes, fake_api):
+    """單張張量直接接 images 也能路由"""
+    nodes._run_replicate_model("nano-banana-2", prompt="x",
+                               images=torch.zeros((1, 16, 16, 3)))
+    assert len(fake_api.captured["inputs"]["image_input"]) == 1
+
+
+def test_unified_images_routes_to_single_image(nodes, fake_api):
+    """吃單張 image 的模型（Veo）：第一張進 image，last_frame 不參與自動分配"""
+    nodes._run_replicate_model(
+        "veo-3.1-fast", prompt="x",
+        images=torch.zeros((1, 16, 16, 3)),
+        last_frame=torch.zeros((1, 8, 8, 3)),  # 獨立輸入
+    )
+    sent = fake_api.captured["inputs"]
+    assert "image" in sent
+    assert "last_frame" in sent
+
+
+def test_unified_images_routes_to_seedance_reference(nodes, fake_api):
+    """Seedance 2.0（吃 reference_images 清單）"""
+    nodes._run_replicate_model(
+        "seedance-2.0", prompt="x", duration=7, resolution="720p",
+        aspect_ratio="16:9", generate_audio=True, seed=-1,
+        images=[torch.zeros((1, 8, 8, 3)), torch.zeros((1, 4, 4, 3))],
+    )
+    assert len(fake_api.captured["inputs"]["reference_images"]) == 2
+
+
+def test_unified_images_routes_to_transparent_image(nodes, fake_api):
+    """透明去背（吃單張 image）：用第一張"""
+    nodes._run_replicate_model(
+        "nano-banana-2-transparent", prompt="",
+        images=[torch.zeros((1, 8, 8, 3)), torch.zeros((1, 4, 4, 3))],
+        alpha_ceil=250, alpha_floor=6,
+    )
+    assert "image" in fake_api.captured["inputs"]
+
+
+def test_unified_images_ignored_by_text_only_model(nodes, fake_api):
+    """不吃圖的模型：忽略且不誤送參數"""
+    nodes._run_replicate_model("flux-schnell", prompt="x",
+                               images=torch.zeros((1, 8, 8, 3)))
+    sent = fake_api.captured["inputs"]
+    assert "image" not in sent and "image_input" not in sent
 
 
 # ======================
