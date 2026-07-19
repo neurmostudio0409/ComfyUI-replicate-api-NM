@@ -398,7 +398,7 @@ class ReplicateDynamicNode:
                     "tooltip": "運動強度 / Motion Bucket - SVD 使用 / Used for SVD"
                 }),
                 "seed": ("INT", {
-                    "default": -1, "min": -1, "max": 2147483647, "step": 1,
+                    "default": -1, "min": -1, "max": 0xffffffffffffffff, "step": 1,
                     "tooltip": "種子值 / Seed - Seedance 等使用 / Used for Seedance etc. (-1 = random)"
                 }),
                 "camera_motion": (["none", "dolly_in", "dolly_out", "pan_left", "pan_right", "tilt_up", "tilt_down", "roll_cw", "roll_ccw"], {
@@ -1115,6 +1115,13 @@ def _run_replicate_model(model_id, prompt="", image=None, input_reference=None,
                         fallback = input_config.get("default", allowed[0])
                         print(f"⚠️ '{input_name}'='{value}' 不被 {model_id} 支援，改用 '{fallback}' (允許值: {allowed})")
                         value = fallback
+                if input_name == "seed" and value is not None:
+                    if value < 0:
+                        value = None  # -1 = 隨機，不送出讓 Replicate 自行決定
+                    else:
+                        cfg_max = input_config.get("max")
+                        if cfg_max is not None and value > cfg_max:
+                            value = value % (cfg_max + 1)
                 if value is not None:
                     inputs[input_name] = value
                 elif is_required and "default" in input_config:
@@ -1379,7 +1386,7 @@ class ReplicateVideoNode:
                     "default": 127, "min": 1, "max": 255, "step": 1,
                     "tooltip": "運動強度 / Motion Bucket (SVD)"}),
                 "seed": ("INT", {
-                    "default": -1, "min": -1, "max": 2147483647, "step": 1,
+                    "default": -1, "min": -1, "max": 0xffffffffffffffff, "step": 1,
                     "tooltip": "種子 / Seed (-1=random)"}),
                 "camera_motion": (["none", "dolly_in", "dolly_out", "pan_left", "pan_right", "tilt_up", "tilt_down", "roll_cw", "roll_ccw"], {
                     "default": "none",

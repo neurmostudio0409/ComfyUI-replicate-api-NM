@@ -352,3 +352,39 @@ def test_download_directory_fallback_without_comfyui(api_module, monkeypatch):
     path = api_module.get_download_directory()
     assert "comfyui_replicate" in path
     assert "comfy_output" not in path
+
+
+# ======================
+# Seed 範圍處理（前端 64-bit，後端依模型摺回）
+# ======================
+
+def test_seed_above_model_max_is_folded(nodes, fake_api):
+    """ComfyUI randomize 產生的 64-bit seed 應摺回模型宣告的上限內"""
+    nodes._run_replicate_model("seedance-2.0", prompt="x", seed=3369995675)
+    sent = fake_api.captured["inputs"]
+    assert sent["seed"] == 3369995675 % (2147483647 + 1)
+    assert 0 <= sent["seed"] <= 2147483647
+
+
+def test_seed_within_model_max_is_untouched(nodes, fake_api):
+    nodes._run_replicate_model("seedance-2.0", prompt="x", seed=12345)
+    assert fake_api.captured["inputs"]["seed"] == 12345
+
+
+def test_seed_negative_is_omitted(nodes, fake_api):
+    """seed=-1 表示隨機，不應送出，由 Replicate 自行決定"""
+    nodes._run_replicate_model("seedance-2.0", prompt="x", seed=-1)
+    assert "seed" not in fake_api.captured["inputs"]
+
+
+def test_seed_not_sent_to_models_without_seed(nodes, fake_api):
+    """未宣告 seed 的模型不應收到 seed 參數"""
+    nodes._run_replicate_model("nano-banana-pro", prompt="x", seed=42)
+    assert "seed" not in fake_api.captured["inputs"]
+
+
+def test_node_seed_max_is_64bit(nodes):
+    """前端 seed 上限放寬到 64-bit，避免 randomize 被 ComfyUI 驗證擋下"""
+    for cls in (nodes.ReplicateDynamicNode, nodes.ReplicateVideoNode):
+        seed_cfg = cls.INPUT_TYPES()["optional"]["seed"][1]
+        assert seed_cfg["max"] == 0xffffffffffffffff
