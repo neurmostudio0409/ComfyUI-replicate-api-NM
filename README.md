@@ -179,6 +179,7 @@ sudo apt-get install ffmpeg
 - ✅ **直接輸出原生格式**：`video`（VIDEO）/ `audio`（AUDIO）/ `image`（IMAGE）/ `file_path`（3D）/ `info`，可直接接 Save Video / Save Audio / Save Image，不需轉換節點
 - ✅ 需要的轉換藏在後端自動處理：音訊檔自動載入為 AUDIO、影音分離的模型自動用 ffmpeg 合併回影片、音訊模型結果不再誤判為影片
 - ✅ 分類節點專屬參數（alpha_ceil/floor、image_search、google_search、model_version、num_samples、prompt_upsampling 等）已併入萬用節點
+- ✅ 送出防手震：1 秒內的重複 Run（連點、按鍵重複）自動忽略，避免同一任務重複送 API 扣費
 - ⚠️ 舊 workflow 中的分類/輸出/Lipsync 節點會失效，請改用萬用生成節點直接接 Save 節點
 
 ### v2.4.0 (2026-07)
@@ -389,6 +390,7 @@ Refer to `model_configs.py` for model configurations and ensure all required par
 - ✅ **Native outputs**: `video` (VIDEO) / `audio` (AUDIO) / `image` (IMAGE) / `file_path` (3D) / `info` — connect directly to Save Video / Save Audio / Save Image, no converter nodes needed
 - ✅ Conversions happen automatically in the backend: audio files are loaded as AUDIO, models returning separate video+audio are muxed back via ffmpeg, audio-model results are no longer misrouted as video
 - ✅ Category-node-only parameters (alpha_ceil/floor, image_search, google_search, model_version, num_samples, prompt_upsampling, …) merged into the universal node
+- ✅ Queue debounce: duplicate Run submissions within 1 second (double-click, key repeat) are ignored to prevent double API charges
 - ⚠️ Category/output/Lipsync nodes in old workflows will break; use the Universal Generator wired straight into Save nodes
 
 #### v2.4.0 (2026-07)
