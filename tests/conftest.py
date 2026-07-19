@@ -31,8 +31,21 @@ def _stub_missing(name, attrs=None):
         sys.modules[name] = mod
 
 
+class _FakeVideoCapture:
+    def __init__(self, *args, **kwargs):
+        pass
+    def isOpened(self):
+        return False
+    def read(self):
+        return (False, None)
+    def get(self, prop):
+        return 0
+    def release(self):
+        pass
+
+
 _stub_missing("cv2", {
-    "VideoCapture": object,
+    "VideoCapture": _FakeVideoCapture,
     "IMREAD_UNCHANGED": -1,
     "imread": lambda *a, **k: None,
 })

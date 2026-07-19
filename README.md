@@ -10,12 +10,13 @@
 
 ### 特色功能
 
-✨ **動態參數** - 根據選擇的模型自動顯示/隱藏相關參數  
-🎬 **影片生成** - Sora 2, Veo 3.1, MiniMax, Wan, SVD, Seedance, Kling, LTX  
-🎭 **唇語同步** - Sync Lipsync 2 Pro  
+🤖 **萬用生成節點** - 單一節點跑所有模型，結果直接輸出 VIDEO / AUDIO / IMAGE，不需任何轉換節點  
+🎬 **影片生成** - Sora 2, Veo 3.1, MiniMax, Wan, SVD, Seedance, Kling, LTX, Grok  
+🎭 **唇語同步** - Sync Lipsync 2 Pro, Video Retalking  
 🎨 **圖片生成** - Nano Banana Pro/2 (含透明去背), FLUX Schnell, FLUX Dev, Luma Photon  
 🖼️ **多圖輸入** - 多張參考圖片一次餵給模型（尺寸可不同，最多 14 張）  
-🔊 **音訊支援** - 獨立音訊輸出與合併功能  
+🔊 **自動轉換** - 音訊載入、影音合併等轉換全部藏在後端自動處理  
+💾 **不重複存檔** - 結果放暫存目錄，保存交給下游 Save 節點  
 
 ### 快速開始
 
@@ -50,26 +51,17 @@ export REPLICATE_API_TOKEN=你的token
 python main.py
 ```
 
-## 可用節點
+## 可用節點（v2.5 起只有兩顆）
 
-### 主要節點
+- **🤖 Replicate 萬用生成 / Universal Generator (All Models)** - 唯一的生成節點，下拉選擇任何模型；輸出：
+  - `video`（VIDEO）→ 直接接 **Save Video**
+  - `audio`（AUDIO）→ 直接接 **Save Audio**（音訊模型結果，或影片音軌）
+  - `image`（IMAGE）→ 直接接 **Save Image**（圖片模型結果，或影片第一幀）
+  - `file_path`（STRING）→ 3D 模型檔路徑（.glb 等）
+  - `info`（STRING）→ 執行資訊
+- **🖼️ 多圖輸入 / Multi Image Input** - 貼上多行圖片路徑一次載入多張（每行一個路徑，支援絕對路徑或 ComfyUI input 目錄相對路徑），也可接線輸入；各圖尺寸可不同，可串接載入更多
 
-- **🎬 Replicate (動態)** - 通用節點，支援所有模型，動態參數顯示
-- **🖼️ 多圖輸入** - 貼上多行圖片路徑一次載入多張（每行一個路徑，支援絕對路徑或 ComfyUI input 目錄相對路徑），也可接線輸入；各圖尺寸可不同，可串接載入更多
-- **📹 Replicate 影片輸出** - 將影片路徑轉換為 VIDEO 格式
-- **🎵 Replicate 音訊輸出** - 輸出音訊檔案
-- **🔄 合併影片與音訊** - 使用 FFmpeg 合併
-
-### 基礎 Lipsync 節點
-
-- **Sync Lipsync 生成** - 生成唇語同步影片
-- **Sync 影片輸出** - 輸出 Lipsync 結果
-
-### 專門化節點（可選）
-
-- **🎬 Replicate 文字生成影片** - MiniMax 文字轉影片
-- **🖼️ Replicate 圖片生成影片** - Wan/SVD 圖片轉影片
-- **🎨 Replicate 圖片生成** - FLUX 圖片生成
+需要的格式轉換（影片包裝、音訊載入、影音合併）全部在後端自動處理，不需要也沒有獨立轉換節點。
 
 ## 支援的模型
 
@@ -98,9 +90,10 @@ python main.py
 ### Nano Banana 多圖參考生成
 
 1. 新增「🖼️ 多圖輸入」節點，在 `image_paths` 貼上圖片路徑（每行一個，可直接用檔案總管「複製路徑」貼上，引號會自動去除）；也可用 image_1~6 接線輸入
-2. 新增「🎨 圖片生成」節點，選擇模型：`nano-banana-pro` 或 `nano-banana-2`
-3. 將多圖輸入的 `image_list` 接到圖片生成節點的 **`images`**（統一圖片接口，單張圖或 batch 也接這裡）
+2. 新增「🤖 Replicate 萬用生成」節點，選擇模型：`nano-banana-pro` 或 `nano-banana-2`
+3. 將多圖輸入的 `image_list` 接到萬用生成節點的 **`images`**（統一圖片接口，單張圖或 batch 也接這裡；其他套件多圖節點的清單輸出也可以）
 4. 輸入提示詞，選擇解析度（1K/2K/4K）與長寬比（`match_input_image` 可跟隨輸入圖）
+5. `image` 輸出接 **Save Image**
 
 ```
 image_paths 範例：
@@ -111,36 +104,22 @@ my_input_image.png        ← ComfyUI input 目錄內的檔案
 
 ### 透明去背（Nano Banana 2 Transparent）
 
-1. 新增「🎨 圖片生成」節點，選擇模型：`nano-banana-2-transparent`
+1. 萬用生成節點選擇模型：`nano-banana-2-transparent`
 2. 把要去背的圖片接到 `images`（後端自動送到模型的 image 端點）
 3. （可選）prompt 指定要保留的主體，例如 `the car`
-4. 輸出為含 alpha 通道的 RGBA 圖片
+4. `image` 輸出為含 alpha 通道的 RGBA 圖片，接 Save Image
 
-### Sora 2 影片生成
+### 影片生成（Sora / Veo / Seedance / Grok…）
 
-1. 新增「🎬 Replicate (動態)」節點
-2. 選擇模型：`sora-2`
-3. 輸入提示詞（prompt）
-4. 選擇長寬比（aspect_ratio）：portrait/landscape/square
-5. （可選）連接輸入參考圖片（input_reference）
-6. 連接「📹 Replicate 影片輸出」來轉換為 VIDEO 格式
+1. 萬用生成節點選擇模型（例如 `sora-2`、`veo-3.1-fast`、`seedance-2.0`）
+2. 輸入提示詞；需要輸入圖的模型把圖接到 `images`（後端自動路由到該模型的圖片端點），Veo 末幀接 `last_frame`
+3. `video` 輸出**直接接 Save Video**（不需轉換節點）；有聲音的模型音軌已含在影片內，`audio` 輸出另可接 Save Audio
 
-### Veo 3.1 影片生成
+### 唇語同步 / 音訊 / 3D
 
-1. 新增「🎬 Replicate (動態)」節點
-2. 選擇模型：`veo-3.1-fast`
-3. 連接輸入圖片（image）- 必要
-4. 輸入提示詞（prompt）- 必要
-5. （可選）連接最後一幀圖片（last_frame）
-6. 選擇解析度（resolution）：480p/720p/1080p
-
-### 唇語同步
-
-1. 新增「Sync Lipsync 生成」節點
-2. 連接影片輸入（IMAGE 格式）
-3. 連接音訊輸入（AUDIO 格式）
-4. 設定參數（sync_mode, temperature）
-5. 連接「Sync 影片輸出」來轉換為 VIDEO 格式
+- 唇語同步：模型選 `lipsync-2-pro` 或 `video-retalking`，接 `video` + `audio` 輸入，輸出接 Save Video
+- 音訊生成：模型選 `musicgen`，`audio` 輸出直接接 **Save Audio**
+- 3D 生成：`file_path` 輸出為 .glb 檔路徑（在暫存目錄，重啟會清除，需要保留請自行複製）
 
 ## 檔案結構
 
@@ -194,6 +173,13 @@ sudo apt-get install ffmpeg
 請參考 `model_configs.py` 中的模型配置，確保提供所有必要參數。
 
 ## 更新日誌
+
+### v2.5.0 (2026-07)
+- ✅ **只留兩顆節點**：🤖 萬用生成（原「動態」節點改名）+ 🖼️ 多圖輸入；分類節點、輸出轉換節點、合併節點、舊版專門化節點全部移除
+- ✅ **直接輸出原生格式**：`video`（VIDEO）/ `audio`（AUDIO）/ `image`（IMAGE）/ `file_path`（3D）/ `info`，可直接接 Save Video / Save Audio / Save Image，不需轉換節點
+- ✅ 需要的轉換藏在後端自動處理：音訊檔自動載入為 AUDIO、影音分離的模型自動用 ffmpeg 合併回影片、音訊模型結果不再誤判為影片
+- ✅ 分類節點專屬參數（alpha_ceil/floor、image_search、google_search、model_version、num_samples、prompt_upsampling 等）已併入萬用節點
+- ⚠️ 舊 workflow 中的分類/輸出/Lipsync 節點會失效，請改用萬用生成節點直接接 Save 節點
 
 ### v2.4.0 (2026-07)
 - ✅ **統一圖片接口**：所有圖片輸入收斂為單一 `images` 孔（接單張、batch 或多圖輸入節點皆可）
@@ -256,12 +242,13 @@ Universal Replicate API integration module supporting multiple AI models (Sora 2
 
 ### Features
 
-✨ **Dynamic Parameters** - Auto show/hide relevant parameters based on selected model  
-🎬 **Video Generation** - Sora 2, Veo 3.1, MiniMax, Wan, SVD, Seedance, Kling, LTX  
-🎭 **Lipsync** - Sync Lipsync 2 Pro  
+🤖 **Universal Generator node** - one node runs every model; outputs native VIDEO / AUDIO / IMAGE directly, no converter nodes  
+🎬 **Video Generation** - Sora 2, Veo 3.1, MiniMax, Wan, SVD, Seedance, Kling, LTX, Grok  
+🎭 **Lipsync** - Sync Lipsync 2 Pro, Video Retalking  
 🎨 **Image Generation** - Nano Banana Pro/2 (incl. transparent matting), FLUX Schnell, FLUX Dev, Luma Photon  
 🖼️ **Multi Image Input** - Paste multiple image paths (one per line) to load them at once; sizes can differ, up to 14 images  
-🔊 **Audio Support** - Independent audio output and merge functionality  
+🔊 **Automatic conversion** - audio loading and video/audio muxing handled in the backend  
+💾 **No duplicate saves** - results go to the temp directory; saving is left to downstream Save nodes  
 
 ### Quick Start
 
@@ -296,25 +283,17 @@ Get your API token from https://replicate.com/account/api-tokens
 python main.py
 ```
 
-### Available Nodes
+### Available Nodes (only two since v2.5)
 
-#### Main Nodes
+- **🤖 Replicate Universal Generator (All Models)** - the only generation node; pick any model from the dropdown. Outputs:
+  - `video` (VIDEO) → connect straight to **Save Video**
+  - `audio` (AUDIO) → connect straight to **Save Audio** (audio-model results or extracted soundtrack)
+  - `image` (IMAGE) → connect straight to **Save Image** (image-model results or first video frame)
+  - `file_path` (STRING) → 3D model file path (.glb etc.)
+  - `info` (STRING) → execution info
+- **🖼️ Multi Image Input** - load multiple images by pasting paths (one per line; absolute or relative to the ComfyUI input directory) or by wiring images; sizes can differ, chainable
 
-- **🎬 Replicate (Dynamic)** - Universal node supporting all models with dynamic parameters
-- **📹 Replicate Video Output** - Convert video path to VIDEO format
-- **🎵 Replicate Audio Output** - Output audio files
-- **🔄 Merge Video & Audio** - Merge using FFmpeg
-
-#### Basic Lipsync Nodes
-
-- **Sync Lipsync Generate** - Generate lip-synced videos
-- **Sync Video Output** - Output Lipsync results
-
-#### Specialized Nodes (Optional)
-
-- **🎬 Replicate Text to Video** - MiniMax text-to-video
-- **🖼️ Replicate Image to Video** - Wan/SVD image-to-video
-- **🎨 Replicate Image Generation** - FLUX image generation
+All required conversions (video wrapping, audio loading, video/audio muxing) happen automatically in the backend — there are no separate converter nodes.
 
 ### Supported Models
 
@@ -340,31 +319,17 @@ python main.py
 
 ### Usage Examples
 
-#### Sora 2 Video Generation
+#### Video Generation (Sora / Veo / Seedance / Grok…)
 
-1. Add "🎬 Replicate (Dynamic)" node
-2. Select model: `sora-2`
-3. Enter prompt
-4. Choose aspect_ratio: portrait/landscape/square
-5. (Optional) Connect input_reference image
-6. Connect "📹 Replicate Video Output" to convert to VIDEO format
+1. Add the "🤖 Replicate Universal Generator" node and select a model (e.g. `sora-2`, `veo-3.1-fast`, `seedance-2.0`)
+2. Enter a prompt; for image-conditioned models wire images into `images` (the backend routes them to the model's image endpoint automatically), Veo last frame goes to `last_frame`
+3. Connect the `video` output **directly to Save Video** — no converter node needed; for models with sound the soundtrack is embedded in the video, and `audio` can additionally go to Save Audio
 
-#### Veo 3.1 Video Generation
+#### Lipsync / Audio / 3D
 
-1. Add "🎬 Replicate (Dynamic)" node
-2. Select model: `veo-3.1-fast`
-3. Connect input image - Required
-4. Enter prompt - Required
-5. (Optional) Connect last_frame image
-6. Choose resolution: 480p/720p/1080p
-
-#### Lipsync
-
-1. Add "Sync Lipsync Generate" node
-2. Connect video input (IMAGE format)
-3. Connect audio input (AUDIO format)
-4. Set parameters (sync_mode, temperature)
-5. Connect "Sync Video Output" to convert to VIDEO format
+- Lipsync: select `lipsync-2-pro` or `video-retalking`, wire `video` + `audio` inputs, connect output to Save Video
+- Audio generation: select `musicgen`; the `audio` output connects straight to **Save Audio**
+- 3D generation: `file_path` holds the .glb path (in the temp directory — copy it elsewhere to keep it across restarts)
 
 ### File Structure
 
@@ -418,6 +383,13 @@ sudo apt-get install ffmpeg
 Refer to `model_configs.py` for model configurations and ensure all required parameters are provided.
 
 ### Changelog
+
+#### v2.5.0 (2026-07)
+- ✅ **Only two nodes remain**: 🤖 Universal Generator (renamed from "Dynamic") + 🖼️ Multi Image Input; category nodes, output converter nodes, merge node and legacy specialized nodes are all removed
+- ✅ **Native outputs**: `video` (VIDEO) / `audio` (AUDIO) / `image` (IMAGE) / `file_path` (3D) / `info` — connect directly to Save Video / Save Audio / Save Image, no converter nodes needed
+- ✅ Conversions happen automatically in the backend: audio files are loaded as AUDIO, models returning separate video+audio are muxed back via ffmpeg, audio-model results are no longer misrouted as video
+- ✅ Category-node-only parameters (alpha_ceil/floor, image_search, google_search, model_version, num_samples, prompt_upsampling, …) merged into the universal node
+- ⚠️ Category/output/Lipsync nodes in old workflows will break; use the Universal Generator wired straight into Save nodes
 
 #### v2.4.0 (2026-07)
 - ✅ **Unified image input**: all image inputs consolidated into a single `images` socket (single image, batch, or Multi Image Input node)

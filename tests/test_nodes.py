@@ -99,19 +99,14 @@ def test_multi_image_is_changed_tracks_mtime(nodes, tmp_path):
 
 
 # ======================
-# 節點輸入定義
+# 節點輸入/輸出定義
 # ======================
 
-def test_image_node_has_unified_images_input(nodes):
-    optional = nodes.ReplicateImageNode.INPUT_TYPES()["optional"]
-    for key in ("images", "resolution", "alpha_ceil", "alpha_floor",
-                "image_search", "google_search"):
-        assert key in optional, f"ReplicateImageNode 缺少 '{key}'"
-    assert optional["images"][0] == "IMAGE,REPLICATE_IMAGE_LIST"
-    assert "match_input_image" in optional["aspect_ratio"][0]
-    # 舊圖片輸入已收斂成統一接口
-    assert "image" not in optional
-    assert "image_input" not in optional
+def test_only_two_nodes_registered(nodes):
+    """v2.5：只留萬用生成節點與多圖輸入節點"""
+    assert set(nodes.NODE_CLASS_MAPPINGS.keys()) == {
+        "ReplicateDynamicNode", "ReplicateMultiImageInput",
+    }
 
 
 def test_dynamic_node_has_unified_images_and_last_frame(nodes):
@@ -123,11 +118,21 @@ def test_dynamic_node_has_unified_images_and_last_frame(nodes):
         assert legacy not in optional, f"'{legacy}' 應收斂到統一 images 接口"
 
 
-def test_video_node_has_unified_images_and_last_frame(nodes):
-    optional = nodes.ReplicateVideoNode.INPUT_TYPES()["optional"]
-    assert optional["images"][0] == "IMAGE,REPLICATE_IMAGE_LIST"
-    assert "last_frame" in optional
-    assert "image" not in optional
+def test_dynamic_node_covers_category_node_params(nodes):
+    """分類節點移除後，其專屬參數需併入萬用節點"""
+    optional = nodes.ReplicateDynamicNode.INPUT_TYPES()["optional"]
+    for key in ("alpha_ceil", "alpha_floor", "image_search", "google_search",
+                "prompt_upsampling", "model_version", "num_samples",
+                "scale", "face_enhance", "generate_audio"):
+        assert key in optional, f"萬用節點缺少 '{key}'"
+
+
+def test_dynamic_node_outputs_native_types(nodes):
+    """輸出直接是 VIDEO/AUDIO/IMAGE，不需轉換節點"""
+    assert nodes.ReplicateDynamicNode.RETURN_TYPES == (
+        "VIDEO", "AUDIO", "IMAGE", "STRING", "STRING")
+    assert nodes.ReplicateDynamicNode.RETURN_NAMES == (
+        "video", "audio", "image", "file_path", "info")
 
 
 # ======================
@@ -217,7 +222,8 @@ def test_run_grok_aspect_fallback(nodes, fake_api):
 
 def test_run_unknown_model_returns_error(nodes, fake_api):
     result = nodes._run_replicate_model("not-a-real-model", prompt="x")
-    assert result[0] == []  # 無影片
+    assert result[0] is None  # 無影片
+    assert result[1] is None  # 無音訊
     assert "未知模型" in result[3]
 
 
@@ -385,9 +391,8 @@ def test_seed_not_sent_to_models_without_seed(nodes, fake_api):
 
 def test_node_seed_max_is_64bit(nodes):
     """前端 seed 上限放寬到 64-bit，避免 randomize 被 ComfyUI 驗證擋下"""
-    for cls in (nodes.ReplicateDynamicNode, nodes.ReplicateVideoNode):
-        seed_cfg = cls.INPUT_TYPES()["optional"]["seed"][1]
-        assert seed_cfg["max"] == 0xffffffffffffffff
+    seed_cfg = nodes.ReplicateDynamicNode.INPUT_TYPES()["optional"]["seed"][1]
+    assert seed_cfg["max"] == 0xffffffffffffffff
 
 
 # ======================
@@ -396,9 +401,7 @@ def test_node_seed_max_is_64bit(nodes):
 
 def test_generation_nodes_declare_input_is_list(nodes):
     """生成節點應宣告 INPUT_IS_LIST，清單輸出才不會造成逐張多次執行"""
-    for cls in (nodes.ReplicateDynamicNode, nodes.ReplicateVideoNode,
-                nodes.ReplicateImageNode, nodes.ReplicateEnhanceNode):
-        assert getattr(cls, "INPUT_IS_LIST", False) is True
+    assert getattr(nodes.ReplicateDynamicNode, "INPUT_IS_LIST", False) is True
 
 
 def test_unwrap_list_inputs_keeps_images_whole(nodes):
@@ -450,11 +453,50 @@ def test_dynamic_node_replicate_image_list_still_works(nodes, fake_api):
     assert len(fake_api.captured["inputs"]["image_input"]) == 2
 
 
-def test_image_node_list_input_single_call(nodes, fake_api):
-    node = nodes.ReplicateImageNode()
+def test_dynamic_node_batch_input_single_call(nodes, fake_api):
+    node = nodes.ReplicateDynamicNode()
     node.run_model(
         model=["nano-banana-pro"],
         prompt=["x"],
         images=[torch.zeros((2, 8, 8, 3))],  # batch 也照樣攤平
     )
     assert len(fake_api.captured["inputs"]["image_input"]) == 2
+
+
+# ======================
+# 原生輸出打包（免轉換節點）
+# ======================
+
+def test_video_result_wrapped_as_native_video(nodes, fake_api, tmp_path, monkeypatch):
+    """影片結果應直接包成 VIDEO 物件，可接 Save Video"""
+    mp4 = tmp_path / "veo.mp4"
+    mp4.write_bytes(b"\x00\x00")
+    monkeypatch.setattr(fake_api, "run_model",
+                        lambda self, m, i, o="out": str(mp4), raising=False)
+    result = nodes._run_replicate_model("veo-3.1-fast", prompt="x")
+    assert result[0] is not None
+    assert result[0].get_path() == str(mp4)
+
+
+def test_audio_model_result_becomes_audio_output(nodes, fake_api, tmp_path, monkeypatch):
+    """音訊模型（MusicGen）的結果應包成 AUDIO dict，而不是誤判成影片"""
+    wav = tmp_path / "musicgen.wav"
+    wav.write_bytes(b"\x00\x00")
+    monkeypatch.setattr(fake_api, "run_model",
+                        lambda self, m, i, o="out": str(wav), raising=False)
+    marker = {"waveform": None, "sample_rate": 44100}
+    monkeypatch.setattr(nodes, "_load_audio_file", lambda p: marker)
+    result = nodes._run_replicate_model("musicgen", prompt="jazz", duration=8)
+    assert result[0] is None      # 不是影片
+    assert result[1] is marker    # AUDIO 輸出
+
+
+def test_3d_result_returned_as_file_path(nodes, fake_api, tmp_path, monkeypatch):
+    """3D 模型結果走 file_path 輸出"""
+    glb = tmp_path / "model.glb"
+    glb.write_bytes(b"\x00")
+    monkeypatch.setattr(fake_api, "run_model",
+                        lambda self, m, i, o="out": str(glb), raising=False)
+    result = nodes._run_replicate_model("veo-3.1-fast", prompt="x")
+    assert result[0] is None
+    assert result[4] == str(glb)
