@@ -412,18 +412,16 @@ class ReplicateDynamicNode:
     RETURN_NAMES = ("video_paths", "audio_paths", "image", "info")
     FUNCTION = "run_model"
     CATEGORY = "replicate/dynamic"
-    
-    def run_model(self, model, prompt="", image=None, input_reference=None, first_frame_image=None,
-                 last_frame=None, start_image=None, video=None, audio=None, **kwargs):
+    INPUT_IS_LIST = True
+
+    def run_model(self, model, **kwargs):
         """
         執行選擇的 Replicate 模型 / Run selected Replicate model
         自動過濾並只使用該模型需要的參數 / Automatically filters and uses only required parameters
         """
-        result = _run_replicate_model(
-            model, prompt=prompt, image=image, input_reference=input_reference,
-            first_frame_image=first_frame_image, last_frame=last_frame,
-            start_image=start_image, video=video, audio=audio, **kwargs
-        )
+        kwargs = _unwrap_list_inputs(kwargs)
+        model = model[0] if isinstance(model, list) else model
+        result = _run_replicate_model(model, **kwargs)
         return (result[0], result[1], result[2], result[3])
 
 
@@ -912,6 +910,22 @@ def _flatten_image_items(value):
         for i in range(tensor.shape[0]):
             items.append(tensor[i:i+1])
     return items
+
+
+def _unwrap_list_inputs(values, keep_whole=("images",)):
+    """INPUT_IS_LIST 模式下 ComfyUI 會把每個輸入包成清單，
+    這裡把單值參數還原，只有 keep_whole（多圖輸入）保留整份清單。
+    如此其他套件的清單輸出（如 Muse 多圖節點）接進來時，
+    節點只會執行一次並同時收到所有圖片，而不是逐張跑多次。"""
+    out = {}
+    for name, value in values.items():
+        if name in keep_whole:
+            out[name] = value
+        elif isinstance(value, list):
+            out[name] = value[0] if value else None
+        else:
+            out[name] = value
+    return out
 
 
 def _extract_video_path(video_input):
@@ -1407,8 +1421,11 @@ class ReplicateVideoNode:
     RETURN_NAMES = ("video_paths", "audio_paths", "image", "info")
     FUNCTION = "run_model"
     CATEGORY = "replicate/video"
+    INPUT_IS_LIST = True
 
     def run_model(self, model, **kwargs):
+        kwargs = _unwrap_list_inputs(kwargs)
+        model = model[0] if isinstance(model, list) else model
         result = _run_replicate_model(model, **kwargs)
         return (result[0], result[1], result[2], result[3])
 
@@ -1455,8 +1472,11 @@ class ReplicateEnhanceNode:
     RETURN_NAMES = ("video_paths", "audio_paths", "image", "info")
     FUNCTION = "run_model"
     CATEGORY = "replicate/enhancement"
-    
+    INPUT_IS_LIST = True
+
     def run_model(self, model, **kwargs):
+        kwargs = _unwrap_list_inputs(kwargs)
+        model = model[0] if isinstance(model, list) else model
         result = _run_replicate_model(model, **kwargs)
         return (result[0], result[1], result[2], result[3])
 
@@ -1561,8 +1581,11 @@ class ReplicateImageNode:
     RETURN_NAMES = ("image", "info")
     FUNCTION = "run_model"
     CATEGORY = "replicate/image"
-    
+    INPUT_IS_LIST = True
+
     def run_model(self, model, **kwargs):
+        kwargs = _unwrap_list_inputs(kwargs)
+        model = model[0] if isinstance(model, list) else model
         result = _run_replicate_model(model, **kwargs)
         return (result[2], result[3])
 

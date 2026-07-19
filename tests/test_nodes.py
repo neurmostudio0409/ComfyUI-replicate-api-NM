@@ -388,3 +388,73 @@ def test_node_seed_max_is_64bit(nodes):
     for cls in (nodes.ReplicateDynamicNode, nodes.ReplicateVideoNode):
         seed_cfg = cls.INPUT_TYPES()["optional"]["seed"][1]
         assert seed_cfg["max"] == 0xffffffffffffffff
+
+
+# ======================
+# INPUT_IS_LIST：整批接收其他套件的清單輸出
+# ======================
+
+def test_generation_nodes_declare_input_is_list(nodes):
+    """生成節點應宣告 INPUT_IS_LIST，清單輸出才不會造成逐張多次執行"""
+    for cls in (nodes.ReplicateDynamicNode, nodes.ReplicateVideoNode,
+                nodes.ReplicateImageNode, nodes.ReplicateEnhanceNode):
+        assert getattr(cls, "INPUT_IS_LIST", False) is True
+
+
+def test_unwrap_list_inputs_keeps_images_whole(nodes):
+    """images 保留整份清單，其他參數還原成單值"""
+    t1, t2 = torch.zeros((1, 8, 8, 3)), torch.zeros((1, 4, 4, 3))
+    out = nodes._unwrap_list_inputs({
+        "images": [t1, t2],
+        "prompt": ["hello"],
+        "seed": [42],
+        "video": [],
+    })
+    assert out["images"] == [t1, t2]
+    assert out["prompt"] == "hello"
+    assert out["seed"] == 42
+    assert out["video"] is None
+
+
+def test_unwrap_list_inputs_passes_plain_values(nodes):
+    """非清單值（直接呼叫時）原樣通過"""
+    out = nodes._unwrap_list_inputs({"prompt": "x", "seed": 7})
+    assert out == {"prompt": "x", "seed": 7}
+
+
+def test_dynamic_node_list_output_runs_once_with_all_images(nodes, fake_api):
+    """模擬其他套件（如 Muse 多圖節點）的清單輸出：
+    INPUT_IS_LIST 模式下節點只執行一次，兩張圖一起送進 image_input"""
+    node = nodes.ReplicateDynamicNode()
+    node.run_model(
+        model=["nano-banana-pro"],
+        prompt=["讓圖1人物在圖2場景互動"],
+        images=[torch.zeros((1, 8, 8, 3)), torch.zeros((1, 4, 4, 3))],
+        resolution=["2K"],
+        aspect_ratio=["match_input_image"],
+        output_format=["jpg"],
+    )
+    sent = fake_api.captured["inputs"]
+    assert len(sent["image_input"]) == 2
+    assert sent["prompt"] == "讓圖1人物在圖2場景互動"
+
+
+def test_dynamic_node_replicate_image_list_still_works(nodes, fake_api):
+    """自家多圖節點的 REPLICATE_IMAGE_LIST（會被再包一層清單）也正常"""
+    node = nodes.ReplicateDynamicNode()
+    node.run_model(
+        model=["nano-banana-2"],
+        prompt=["x"],
+        images=[[torch.zeros((1, 8, 8, 3)), torch.zeros((1, 4, 4, 3))]],
+    )
+    assert len(fake_api.captured["inputs"]["image_input"]) == 2
+
+
+def test_image_node_list_input_single_call(nodes, fake_api):
+    node = nodes.ReplicateImageNode()
+    node.run_model(
+        model=["nano-banana-pro"],
+        prompt=["x"],
+        images=[torch.zeros((2, 8, 8, 3))],  # batch 也照樣攤平
+    )
+    assert len(fake_api.captured["inputs"]["image_input"]) == 2

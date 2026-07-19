@@ -199,6 +199,8 @@ sudo apt-get install ffmpeg
 - ✅ **統一圖片接口**：所有圖片輸入收斂為單一 `images` 孔（接單張、batch 或多圖輸入節點皆可）
 - ✅ 分配邏輯藏在後端：依模型設定自動路由到對應端點（Nano Banana→image_input、Seedance→reference_images、Veo/Wan→image、Sora→input_reference、MiniMax→首幀、Kling→起始圖）
 - ✅ `last_frame`（末幀）保留獨立輸入，不參與自動分配
+- ✅ **相容其他套件的清單輸出**：生成節點改為整批接收（INPUT_IS_LIST），接其他套件多圖節點的清單輸出時只執行一次、所有圖一起送出（不再逐張跑多次）
+- ✅ Seed 支援 64-bit randomize：前端上限放寬，後端依各模型上限自動摺回；seed=-1 不送出（由 Replicate 隨機）
 - ⚠️ 舊的 image / input_reference / first_frame_image / start_image / reference_images / image_input 輸入孔已移除，舊 workflow 需改接 `images`
 
 ### v2.3.2 (2026-07)
@@ -421,6 +423,8 @@ Refer to `model_configs.py` for model configurations and ensure all required par
 - ✅ **Unified image input**: all image inputs consolidated into a single `images` socket (single image, batch, or Multi Image Input node)
 - ✅ Routing hidden in backend: automatically mapped to each model's endpoint (Nano Banana→image_input, Seedance→reference_images, Veo/Wan→image, Sora→input_reference, MiniMax→first frame, Kling→start image)
 - ✅ `last_frame` kept as a dedicated input, excluded from auto-routing
+- ✅ **Compatible with list outputs from other packages**: generation nodes use INPUT_IS_LIST so list outputs run the node once with all images together (no more one-run-per-image)
+- ✅ 64-bit seed randomize supported: frontend limit widened, backend folds values into each model's declared range; seed=-1 is omitted (Replicate randomizes)
 - ⚠️ Legacy image sockets removed; reconnect old workflows to `images`
 
 #### v2.3.2 (2026-07)
