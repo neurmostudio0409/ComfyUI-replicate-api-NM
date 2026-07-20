@@ -197,7 +197,12 @@ def test_run_nano_banana_pro_basic(nodes, fake_api):
     }
 
 
-def test_run_grok_imagine_video(nodes, fake_api):
+def test_run_grok_imagine_video(nodes, fake_api, tmp_path, monkeypatch):
+    """Grok 後端讀不到 Replicate 檔案 API 的授權 URL，圖片應以 data URI 內嵌"""
+    png = tmp_path / "in.png"
+    png.write_bytes(b"\x89PNG-fake-bytes")
+    monkeypatch.setattr(nodes.ImageUtils, "save_image_tensor",
+                        staticmethod(lambda tensor: str(png)))
     nodes._run_replicate_model(
         "grok-imagine-video", prompt="a penguin walks away",
         image=torch.zeros((1, 16, 16, 3)),
@@ -206,10 +211,19 @@ def test_run_grok_imagine_video(nodes, fake_api):
     assert fake_api.captured["model"] == "grok-imagine-video"
     sent = fake_api.captured["inputs"]
     assert sent["prompt"] == "a penguin walks away"
-    assert sent["image"].startswith("https://")
+    assert sent["image"].startswith("data:image/png;base64,")
     assert sent["duration"] == 5
     assert sent["resolution"] == "720p"
     assert sent["aspect_ratio"] == "16:9"
+
+
+def test_other_models_still_upload_by_url(nodes, fake_api):
+    """未標記 image_as_data_uri 的模型維持檔案上傳 URL"""
+    nodes._run_replicate_model(
+        "veo-3.1-fast", prompt="x",
+        images=torch.zeros((1, 8, 8, 3)),
+    )
+    assert fake_api.captured["inputs"]["image"].startswith("https://")
 
 
 def test_run_grok_aspect_fallback(nodes, fake_api):

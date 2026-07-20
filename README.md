@@ -174,6 +174,9 @@ sudo apt-get install ffmpeg
 
 ## 更新日誌
 
+### v2.5.1 (2026-07)
+- 🐛 修正 Grok 圖生影片報「Invalid image format」：xai 後端讀不到 Replicate 檔案 API 的授權 URL，Grok 的圖片改以 base64 data URI 內嵌傳送（其他模型維持檔案上傳）
+
 ### v2.5.0 (2026-07)
 - ✅ **只留兩顆節點**：🤖 萬用生成（原「動態」節點改名）+ 🖼️ 多圖輸入；分類節點、輸出轉換節點、合併節點、舊版專門化節點全部移除
 - ✅ **直接輸出原生格式**：`video`（VIDEO）/ `audio`（AUDIO）/ `image`（IMAGE）/ `file_path`（3D）/ `info`，可直接接 Save Video / Save Audio / Save Image，不需轉換節點
@@ -384,6 +387,9 @@ sudo apt-get install ffmpeg
 Refer to `model_configs.py` for model configurations and ensure all required parameters are provided.
 
 ### Changelog
+
+#### v2.5.1 (2026-07)
+- 🐛 Fixed Grok image-to-video "Invalid image format": the xai backend cannot read Replicate's authenticated file API URLs, so Grok images are now sent inline as base64 data URIs (other models keep file upload)
 
 #### v2.5.0 (2026-07)
 - ✅ **Only two nodes remain**: 🤖 Universal Generator (renamed from "Dynamic") + 🖼️ Multi Image Input; category nodes, output converter nodes, merge node and legacy specialized nodes are all removed

@@ -332,6 +332,18 @@ def _unwrap_list_inputs(values, keep_whole=("images",)):
     return out
 
 
+def _encode_image_data_uri(image_path):
+    """把圖片檔編成 base64 data URI
+    （部分模型後端無法讀取 Replicate 檔案 API 的授權 URL，需內嵌傳送）"""
+    import base64
+    ext = os.path.splitext(image_path)[1].lower().lstrip(".") or "png"
+    if ext == "jpg":
+        ext = "jpeg"
+    with open(image_path, "rb") as f:
+        encoded = base64.b64encode(f.read()).decode("ascii")
+    return f"data:image/{ext};base64,{encoded}"
+
+
 def _extract_video_path(video_input):
     """從影片輸入提取檔案路徑"""
     if isinstance(video_input, str):
@@ -513,7 +525,13 @@ def _run_replicate_model(model_id, prompt="", image=None, input_reference=None,
                     image_path = ImageUtils.save_image_tensor(image_param)
                     if image_path:
                         temp_files.append(image_path)
-                        image_url = api.upload_file(image_path)
+                        if config.get("image_as_data_uri"):
+                            # 部分模型（如 xai Grok）無法讀取 Replicate 檔案 API 的
+                            # 授權 URL，改以 base64 data URI 內嵌傳送
+                            image_url = _encode_image_data_uri(image_path)
+                            print(f"🖼️ '{input_name}': 以 data URI 內嵌傳送 ({len(image_url) // 1024} KB)")
+                        else:
+                            image_url = api.upload_file(image_path)
                         if image_url:
                             inputs[input_name] = image_url
                 elif is_required:

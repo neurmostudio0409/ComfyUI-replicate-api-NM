@@ -315,6 +315,8 @@ REPLICATE_MODELS = {
         },
         "outputs": ["video"],
         "return_type": "VIDEO",
+        # xai 後端讀不到 Replicate 檔案 API 的授權 URL，圖片需以 data URI 內嵌
+        "image_as_data_uri": True,
     },
 
     "p-video": {
