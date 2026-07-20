@@ -46,6 +46,23 @@ except ImportError:
     folder_paths = FolderPaths()
 
 
+def _summarize_inputs(inputs, max_len=120):
+    """log 用的參數摘要：長字串（data URI、base64）截斷成大小資訊，避免洗版"""
+    summary = {}
+    for key, value in inputs.items():
+        if isinstance(value, str) and value.startswith("data:"):
+            head = value.split(",", 1)[0]
+            summary[key] = f"{head},<{len(value) // 1024} KB base64>"
+        elif isinstance(value, str) and len(value) > max_len:
+            summary[key] = value[:max_len] + f"…(共 {len(value)} 字元)"
+        elif isinstance(value, list):
+            summary[key] = [_summarize_inputs({"_": v}, max_len)["_"] if isinstance(v, str) else v
+                            for v in value]
+        else:
+            summary[key] = value
+    return summary
+
+
 def get_download_directory():
     """下載結果的暫存目錄。
     結果一律下載到 ComfyUI temp 目錄（重啟自動清除），
@@ -147,7 +164,7 @@ class ReplicateAPI:
             model_name = model_id if '/' in model_id else f"replicate/{model_id}"
             print(f"🤖 執行模型: {model_name}")
         
-        print(f"📝 輸入: {inputs}")
+        print(f"📝 輸入: {_summarize_inputs(inputs)}")
         
         try:
             # Run the model on Replicate

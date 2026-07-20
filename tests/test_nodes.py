@@ -514,3 +514,27 @@ def test_3d_result_returned_as_file_path(nodes, fake_api, tmp_path, monkeypatch)
     result = nodes._run_replicate_model("veo-3.1-fast", prompt="x")
     assert result[0] is None
     assert result[4] == str(glb)
+
+
+# ======================
+# Log 參數摘要（data URI 不洗版）
+# ======================
+
+def test_summarize_inputs_truncates_data_uri(api_module):
+    inputs = {
+        "prompt": "hello",
+        "image": "data:image/png;base64," + "A" * 500000,
+        "duration": 8,
+    }
+    out = api_module._summarize_inputs(inputs)
+    assert out["prompt"] == "hello"
+    assert out["duration"] == 8
+    assert len(out["image"]) < 200
+    assert "KB base64" in out["image"]
+
+
+def test_summarize_inputs_truncates_in_lists(api_module):
+    inputs = {"image_input": ["data:image/png;base64," + "B" * 100000, "https://x/y.png"]}
+    out = api_module._summarize_inputs(inputs)
+    assert "KB base64" in out["image_input"][0]
+    assert out["image_input"][1] == "https://x/y.png"
