@@ -174,6 +174,13 @@ sudo apt-get install ffmpeg
 
 ## 更新日誌
 
+### v2.5.2 (2026-08)
+- 🐛 修正 Lipsync 等模型接 comfy-core「Load Video」時影片被靜默丟棄（原生 VIDEO 物件解析），導致 422「video is required」
+- 🐛 修正長時間生成（Veo 等影片模型）ReadTimeout：改用非阻塞建立 + 輪詢等待，影片生成再久也不會逾時收不到結果
+- ✅ 必要輸入預檢：缺必要輸入直接在節點上報清楚錯誤（不再白送 API）
+- ✅ 生成失敗改為在節點上顯示錯誤，下游 Save 節點不再收到 None 而崩潰
+- ✅ Veo 3.1 Fast 的 image 改為選配（支援純文字生影片）
+
 ### v2.5.1 (2026-07)
 - 🐛 修正 Grok 圖生影片報「Invalid image format」：xai 後端讀不到 Replicate 檔案 API 的授權 URL，Grok 的圖片改以 base64 data URI 內嵌傳送（其他模型維持檔案上傳）
 
@@ -387,6 +394,13 @@ sudo apt-get install ffmpeg
 Refer to `model_configs.py` for model configurations and ensure all required parameters are provided.
 
 ### Changelog
+
+#### v2.5.2 (2026-08)
+- 🐛 Fixed silently dropped video input when wiring comfy-core "Load Video" into lipsync-style models (native VIDEO object parsing), which caused 422 "video is required"
+- 🐛 Fixed ReadTimeout on long generations (Veo and other video models): predictions are now created non-blocking and polled, so results are received no matter how long generation takes
+- ✅ Required-input pre-flight: missing required inputs raise a clear error on the node (no wasted API call)
+- ✅ Failed generations now surface the error on the node; downstream Save nodes no longer crash on None
+- ✅ Veo 3.1 Fast `image` is now optional (text-to-video supported)
 
 #### v2.5.1 (2026-07)
 - 🐛 Fixed Grok image-to-video "Invalid image format": the xai backend cannot read Replicate's authenticated file API URLs, so Grok images are now sent inline as base64 data URIs (other models keep file upload)
