@@ -169,8 +169,11 @@ class ReplicateAPI:
         try:
             # Run the model on Replicate
             print(f"📡 傳送請求到 Replicate...")
-            
-            output = replicate.run(model_name, input=inputs)
+
+            # wait=False：立即建立 prediction 後改用輪詢等待。
+            # 預設的同步模式（Prefer: wait）會讓伺服器握著連線等結果，
+            # 影片等長時間生成會觸發 httpx ReadTimeout，導致生成成功卻收不到。
+            output = replicate.run(model_name, input=inputs, wait=False)
             
             print(f"✅ 模型執行完成")
             
