@@ -210,10 +210,9 @@ class ReplicateAPI:
                 
         except Exception as e:
             print(f"❌ 模型執行時發生錯誤: {e}")
-            import traceback
-            traceback.print_exc()
-            return None
-    
+            # 讓錯誤傳回節點層拋出，避免下游節點收到 None
+            raise
+
     def _process_output(self, output, output_type, filename):
         """
         根據類型處理模型輸出

@@ -234,11 +234,86 @@ def test_run_grok_aspect_fallback(nodes, fake_api):
     assert fake_api.captured["inputs"]["aspect_ratio"] == "auto"
 
 
-def test_run_unknown_model_returns_error(nodes, fake_api):
-    result = nodes._run_replicate_model("not-a-real-model", prompt="x")
-    assert result[0] is None  # 無影片
-    assert result[1] is None  # 無音訊
-    assert "未知模型" in result[3]
+def test_run_unknown_model_raises(nodes, fake_api):
+    import pytest
+    with pytest.raises(ValueError, match="未知模型"):
+        nodes._run_replicate_model("not-a-real-model", prompt="x")
+
+
+# ======================
+# 必要輸入預檢 / Required input pre-flight
+# ======================
+
+def test_missing_required_video_raises_before_api(nodes, fake_api, monkeypatch):
+    """lipsync-2-pro 缺 video：應在送 API 前就報錯（不打 Replicate）"""
+    import pytest
+    monkeypatch.setattr(nodes.AudioUtils, "save_audio_from_comfyui",
+                        staticmethod(lambda audio: "fake_audio.wav"))
+    audio = {"waveform": torch.zeros((1, 1, 1000)), "sample_rate": 22050}
+    with pytest.raises(ValueError, match="video"):
+        nodes._run_replicate_model("lipsync-2-pro", audio=audio)
+    assert fake_api.captured.get("inputs") is None  # 沒有送出請求
+
+
+def test_api_error_propagates_to_node(nodes, fake_api, monkeypatch):
+    """API 失敗時節點應拋出例外，而不是回傳 None 給下游 Save 節點"""
+    import pytest
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("Input validation failed")
+    monkeypatch.setattr(fake_api, "run_model", boom)
+    with pytest.raises(RuntimeError, match="Input validation failed"):
+        nodes._run_replicate_model("grok-imagine-video", prompt="x")
+
+
+# ======================
+# 原生 VIDEO 物件解析 / Native VIDEO object extraction
+# ======================
+
+def test_extract_video_path_native_stream_source(nodes, tmp_path):
+    """comfy-core Load Video 的 VideoFromFile：用 get_stream_source() 取路徑"""
+    video_file = tmp_path / "clip.mp4"
+    video_file.write_bytes(b"fake")
+
+    class FakeVideoFromFile:
+        def get_stream_source(self):
+            return str(video_file)
+
+    assert nodes._extract_video_path(FakeVideoFromFile()) == str(video_file)
+
+
+def test_extract_video_path_native_save_to(nodes):
+    """get_stream_source 不可用時退回 save_to()，並登記暫存檔"""
+    class FakeVideo:
+        def save_to(self, path, **kwargs):
+            with open(path, "wb") as f:
+                f.write(b"fake")
+
+    temp_files = []
+    path = nodes._extract_video_path(FakeVideo(), temp_files)
+    assert path and temp_files == [path]
+    import os
+    assert os.path.exists(path)
+    os.remove(path)
+
+
+def test_lipsync_video_uploaded_from_native_object(nodes, fake_api, tmp_path, monkeypatch):
+    """lipsync-2-pro 接原生 VIDEO 物件 + 音訊：video/audio 都應上傳成功"""
+    video_file = tmp_path / "talk.mp4"
+    video_file.write_bytes(b"fake")
+
+    class FakeVideoFromFile:
+        def get_stream_source(self):
+            return str(video_file)
+
+    monkeypatch.setattr(nodes.AudioUtils, "save_audio_from_comfyui",
+                        staticmethod(lambda audio: "fake_audio.wav"))
+    audio = {"waveform": torch.zeros((1, 1, 1000)), "sample_rate": 22050}
+    nodes._run_replicate_model("lipsync-2-pro",
+                               video=FakeVideoFromFile(), audio=audio)
+    sent = fake_api.captured["inputs"]
+    assert sent["video"].startswith("https://")
+    assert sent["audio"].startswith("https://")
 
 
 # ======================

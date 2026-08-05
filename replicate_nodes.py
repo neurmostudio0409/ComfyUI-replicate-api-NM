@@ -344,7 +344,7 @@ def _encode_image_data_uri(image_path):
     return f"data:image/{ext};base64,{encoded}"
 
 
-def _extract_video_path(video_input):
+def _extract_video_path(video_input, temp_files=None):
     """從影片輸入提取檔案路徑"""
     if isinstance(video_input, str):
         return video_input
@@ -354,6 +354,25 @@ def _extract_video_path(video_input):
         return video_input.filename
     elif isinstance(video_input, dict):
         return video_input.get('video') or video_input.get('filename') or video_input.get('path')
+    # ComfyUI 原生 VIDEO 物件（Load Video 節點的 VideoFromFile 等）
+    if hasattr(video_input, 'get_stream_source'):
+        try:
+            source = video_input.get_stream_source()
+            if isinstance(source, str):
+                return source
+        except Exception:
+            pass
+    if hasattr(video_input, 'save_to'):
+        try:
+            import tempfile
+            tmp = tempfile.NamedTemporaryFile(suffix='.mp4', delete=False)
+            tmp.close()
+            video_input.save_to(tmp.name)
+            if temp_files is not None:
+                temp_files.append(tmp.name)
+            return tmp.name
+        except Exception as e:
+            print(f"⚠️ 無法從 VIDEO 物件存出檔案: {e}")
     return None
 
 
@@ -411,9 +430,7 @@ def _run_replicate_model(model_id, prompt="", image=None, input_reference=None,
     """
     config = get_model_config(model_id) if HAS_MODEL_CONFIGS else None
     if not config:
-        info = f"❌ 未知模型: {model_id}"
-        print(info)
-        return (None, None, torch.zeros((1, 512, 512, 3)), info, "")
+        raise ValueError(f"❌ 未知模型: {model_id}")
     
     print("=" * 60)
     print(f"🤖 Replicate: {config['display_name']}")
@@ -573,11 +590,13 @@ def _run_replicate_model(model_id, prompt="", image=None, input_reference=None,
 
             elif input_type == "VIDEO":
                 if video is not None:
-                    video_path = _extract_video_path(video)
+                    video_path = _extract_video_path(video, temp_files)
                     if video_path and os.path.exists(video_path):
                         video_url = api.upload_file(video_path)
                         if video_url:
                             inputs[input_name] = video_url
+                    else:
+                        print(f"⚠️ 無法從 video 輸入取得檔案（型別: {type(video).__name__}）/ cannot resolve video input to a file")
                             
             elif input_type == "AUDIO":
                 if audio is not None:
@@ -619,13 +638,31 @@ def _run_replicate_model(model_id, prompt="", image=None, input_reference=None,
                 continue
             print(f"⚠️ 輸入 '{name}' 已連接，但 {model_id} 不使用此參數，已忽略 / '{name}' is connected but not used by this model, ignored")
 
+        # 預檢必要輸入：缺少就直接報錯（不送 API），避免 422 與下游節點收到 None
+        socket_hint = {"VIDEO": "video", "AUDIO": "audio", "IMAGE": "images", "IMAGE_LIST": "images"}
+        missing = []
+        for input_name, input_config in model_inputs.items():
+            if not input_config.get("required", False):
+                continue
+            value = inputs.get(input_name)
+            if value is None or value == "" or (isinstance(value, (list, tuple)) and len(value) == 0):
+                socket = socket_hint.get(input_config.get("type"), input_name)
+                missing.append(f"{input_name}（請接上/填寫節點的 '{socket}' 輸入）")
+        if missing:
+            raise ValueError(
+                f"❌ {config['display_name']} ({model_id}) 缺少必要輸入 / missing required input(s): "
+                + "、".join(missing))
+
         print(f"📤 執行模型...")
         print(f"📝 參數: {list(inputs.keys())}")
-        
+
         result = api.run_model(model_id, inputs, output_filename)
-        
+
         for temp_file in temp_files:
             cleanup_temp_file(temp_file)
+
+        if result is None:
+            raise RuntimeError(f"❌ {model_id} 未回傳任何結果 / model returned no output")
         
         # 處理結果
         video_path = ""
@@ -711,11 +748,11 @@ def _run_replicate_model(model_id, prompt="", image=None, input_reference=None,
 
     except Exception as e:
         print(f"❌ 錯誤: {e}")
-        import traceback
-        traceback.print_exc()
         for temp_file in temp_files:
             cleanup_temp_file(temp_file)
-        return (None, None, torch.zeros((1, 512, 512, 3)), f"❌ 錯誤: {str(e)}", "")
+        # 直接拋出讓 ComfyUI 把錯誤標在本節點上；
+        # 過去回傳 None 會讓下游 Save 節點炸出難懂的 AttributeError
+        raise
 
 
 # ======================

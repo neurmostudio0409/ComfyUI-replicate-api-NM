@@ -88,7 +88,8 @@ class FakeReplicateAPI:
             "inputs": dict(inputs),
             "output_filename": output_filename,
         }
-        return None
+        # 回傳不存在的假路徑（None 會觸發節點的「未回傳結果」錯誤）
+        return "fake_result.mp4"
 
 
 @pytest.fixture

@@ -25,7 +25,8 @@ REPLICATE_MODELS = {
         "category": "video/generation",
         "description": "Google's Veo 3.1 - Fast video generation from image and text",
         "inputs": {
-            "image": {"type": "IMAGE", "required": True},
+            # Replicate 上 image 為選配（純文字也可生影片）
+            "image": {"type": "IMAGE", "required": False},
             "prompt": {"type": "STRING", "required": True, "multiline": True},
             "last_frame": {"type": "IMAGE", "required": False},
             "resolution": {"type": "COMBO", "options": ["480p", "720p", "1080p"], "default": "720p"},
